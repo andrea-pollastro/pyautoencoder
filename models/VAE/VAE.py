@@ -1,4 +1,6 @@
 from .base import BaseVAE
+from utils.loss import ELBO
+from typing import Tuple
 import torch
 import torch.nn as nn
 
@@ -7,9 +9,13 @@ class VariationalAutoencoder(BaseVAE):
                  encoder: nn.Module, 
                  decoder: nn.Module, 
                  latent_dim: int):
-        super(VariationalAutoencoder, self).__init__(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+        super().__init__(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+        
+        self.elbo = ELBO
 
-    def forward(self, x: torch.Tensor, L: int = 1):
+    def forward(self, 
+                x: torch.Tensor, 
+                L: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         B = x.size(0)
 
         # q(z|x)

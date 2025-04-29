@@ -46,3 +46,11 @@ def ELBO(x: torch.Tensor,
     kl_divergence = kl_divergence.mean()
 
     return elbo, log_p_x_given_z, kl_divergence
+
+def IWAE_ELBO(x: torch.Tensor, 
+              x_hat: torch.Tensor, 
+              mu: torch.Tensor, 
+              log_var: torch.Tensor,
+              likelihood: str = 'gaussian') -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    # TODO continue from here
+    raise NotImplementedError("IWAE ELBO is not implemented yet.")

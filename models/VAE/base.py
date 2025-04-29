@@ -7,7 +7,7 @@ class BaseVAE(nn.Module, ABC):
                  encoder: nn.Module, 
                  decoder: nn.Module, 
                  latent_dim: int):
-        super(BaseVAE, self).__init__()
+        super().__init__()
 
         self.encoder = encoder
         self.decoder = decoder
