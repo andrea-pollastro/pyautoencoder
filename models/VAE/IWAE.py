@@ -15,4 +15,4 @@ class ImportanceWeightedAutoencoder(VariationalAutoencoder):
     def forward(self, x: torch.Tensor, L: int = 2):
         if self.training and L < 2:
             raise ValueError("L must be greater than or equal to 2 for IWAE.")
-        super().forward(x, L=L)
+        return super().forward(x, L=L)

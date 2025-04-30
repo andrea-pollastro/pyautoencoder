@@ -25,7 +25,7 @@ class BaseVAE(nn.Module, ABC):
             eps = torch.randn_like(std)
             z = mu + std * eps
         else:
-            z = mu
+            z = mu.unsqueeze(1).expand(-1, L, -1)
             
         return z
 
