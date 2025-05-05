@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Callable
+from typing import Callable, Tuple
 from scipy.stats import multivariate_normal
 
-def generate_nonlinear_1D(z: np.ndarray, noise_std: float = 0.1):
+def generate_nonlinear_1D(z: np.ndarray, noise_std: float = 0.1) -> np.ndarray:
     """
     Nonlinear generative function mapping latent variables z in R^2 to observations x in R^1.
 
@@ -26,7 +26,7 @@ def generate_nonlinear_1D(z: np.ndarray, noise_std: float = 0.1):
     noise = np.random.normal(0, noise_std, size=z.shape[0])
     return (x + noise).reshape(-1, 1)
 
-def generate_nonlinear_2D(z: np.ndarray, noise_std: float = 0.1):
+def generate_nonlinear_2D(z: np.ndarray, noise_std: float = 0.1) -> np.ndarray:
     """
     Nonlinear generative function mapping latent variables z in R^2 to observations x in R^2.
 
@@ -61,7 +61,7 @@ def make_mixture_gaussian(n_samples: int = 1000,
                           radius: float = 1, 
                           generative_fn: Callable = generate_nonlinear_1D,
                           generative_noise_std: float = 0.1,
-                          random_seed: int = 0):
+                          random_seed: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Generates samples from a 2D latent mixture of Gaussians and applies a nonlinear generative function.
 
@@ -109,19 +109,19 @@ def make_mixture_gaussian(n_samples: int = 1000,
 
     return x, z, centers, cov, component_ids
 
-def compute_true_posterior(x: np.ndarray,
+def compute_true_posterior(x0: np.ndarray,
                            z: np.ndarray, 
                            centers: np.ndarray,
                            cov: np.ndarray,
                            generative_fn: Callable = generate_nonlinear_1D,
                            generative_noise_std: float = 0.1,
                            grid_size: int = 100, 
-                           h: float = 0.1):
+                           h: float = 0.1) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Computes the true posterior density p(z | x) on a 2D grid using Bayes' rule.
 
     Args:
-        x (np.ndarray): Observation vector of shape (d,).
+        x0 (np.ndarray): Observation vector of shape (d,).
         z (np.ndarray): Latent samples used for grid bounds (N, 2).
         centers (np.ndarray): Mixture component means (K, 2).
         cov (np.ndarray): Shared covariance matrix for components (2, 2).
@@ -148,9 +148,9 @@ def compute_true_posterior(x: np.ndarray,
     p_z /= len(centers)
 
     # log p(x|z)
-    diff = generative_fn(Z, noise_std=0.0) - x
+    diff = generative_fn(Z, noise_std=0.0) - x0
     log_p_x_given_z = -0.5 * np.sum((diff / generative_noise_std) ** 2, axis=1) \
-                      - x.shape[0] * np.log(np.sqrt(2 * np.pi) * generative_noise_std)
+                      - x0.shape[0] * np.log(np.sqrt(2 * np.pi) * generative_noise_std)
 
 
     # p(z|x)
@@ -158,31 +158,32 @@ def compute_true_posterior(x: np.ndarray,
     p_z_given_x = np.exp(log_p_z_given_x - np.max(log_p_z_given_x))  # for numerical stability
     p_z_given_x /= np.sum(p_z_given_x)
     p_z_given_x = p_z_given_x.reshape(grid_size, grid_size)
+    p_z_given_x = p_z_given_x / p_z_given_x.sum()
 
     return Z1, Z2, p_z_given_x
 
 def plot_latent_and_true_posterior(z: np.ndarray,
-                              x: np.ndarray,
-                              x_all: np.ndarray,
-                              Z1: np.ndarray,
-                              Z2: np.ndarray,
-                              p_z_given_x: np.ndarray):
+                                   x0: np.ndarray,
+                                   x: np.ndarray,
+                                   Z1: np.ndarray,
+                                   Z2: np.ndarray,
+                                   p_z_given_x: np.ndarray):
     """
     Plots latent samples colored by each dimension of x and the true posterior p(z | x).
 
     Args:
         z (np.ndarray): Latent samples of shape (N, 2).
-        x (np.ndarray): Observation vector used for posterior (d,).
-        x_all (np.ndarray): All generated outputs x of shape (N, d).
+        x0 (np.ndarray): Observation vector used for posterior (d,).
+        x (np.ndarray): All generated outputs x of shape (N, d).
         Z1 (np.ndarray): Meshgrid of z1 for plotting.
         Z2 (np.ndarray): Meshgrid of z2 for plotting.
         p_z_given_x (np.ndarray): Posterior density p(z | x) over the grid.
     """
-    d = x_all.shape[1]
+    d = x.shape[1]
     fig, axs = plt.subplots(1, d + 1, figsize=(5 * (d + 1), 4), sharey=True)
 
     for i in range(d):
-        sc = axs[i].scatter(z[:, 0], z[:, 1], c=x_all[:, i], cmap='coolwarm', s=2, alpha=0.6)
+        sc = axs[i].scatter(z[:, 0], z[:, 1], c=x[:, i], cmap='coolwarm', s=2, alpha=0.6)
         plt.colorbar(sc, ax=axs[i], label=f'$x_{{{i+1}}}$')
         axs[i].set_title(f'Latent colored by $x_{{{i+1}}}$', fontsize=12)
         axs[i].set_xlabel('$z_1$', fontsize=10)
@@ -192,7 +193,7 @@ def plot_latent_and_true_posterior(z: np.ndarray,
 
     cb = axs[-1].contourf(Z1, Z2, p_z_given_x, levels=50, cmap='viridis')
     plt.colorbar(cb, ax=axs[-1], label='Density')
-    axs[-1].set_title(f'True Posterior $p(z \\mid x=[{",".join(str(np.round(i, 3)) for i in x)}])$', fontsize=12)
+    axs[-1].set_title(f'True Posterior $p(z \\mid x=[{",".join(str(np.round(i, 3)) for i in x0)}])$', fontsize=12)
     axs[-1].set_xlabel('$z_1$', fontsize=10)
     axs[-1].set_ylabel('$z_2$', fontsize=10)
     axs[-1].axis("equal")

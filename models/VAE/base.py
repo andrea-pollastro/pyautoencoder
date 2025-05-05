@@ -24,6 +24,7 @@ class BaseVAE(nn.Module, ABC):
                  latent_dim: int):
         super().__init__()
 
+        self.latent_dim = latent_dim
         self.encoder = encoder
         self.decoder = decoder
         self.fc_mu = nn.LazyLinear(latent_dim)
