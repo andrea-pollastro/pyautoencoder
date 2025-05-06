@@ -1,4 +1,4 @@
-from .toy_datasets import (
+from .datasets import (
     generate_nonlinear_1D, 
     generate_nonlinear_2D, 
     compute_true_posterior, 

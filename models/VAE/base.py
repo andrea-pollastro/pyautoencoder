@@ -6,29 +6,16 @@ class BaseVAE(nn.Module, ABC):
     """
     Abstract base class for Variational Autoencoders (VAEs).
 
-    This class provides the shared structure and behavior for VAE models, including:
-    - encoder and decoder modules,
-    - layers for computing latent mean and log-variance,
-    - the reparameterization trick for sampling latent variables.
+    This class defines the common interface and utility for VAE-style models.
+    It provides:
+    - A shared reparameterization method,
+    - An abstract forward method to be implemented by subclasses.
 
-    Subclasses must implement the `forward` method.
-
-    Args:
-        encoder (nn.Module): Neural network encoder that outputs a feature representation.
-        decoder (nn.Module): Neural network decoder that reconstructs input from latent space.
-        latent_dim (int): Dimensionality of the latent variable z.
+    Subclasses should implement the full model architecture and define
+    how the forward pass returns the reconstructed input and latent statistics.
     """
-    def __init__(self, 
-                 encoder: nn.Module, 
-                 decoder: nn.Module, 
-                 latent_dim: int):
+    def __init__(self):
         super().__init__()
-
-        self.latent_dim = latent_dim
-        self.encoder = encoder
-        self.decoder = decoder
-        self.fc_mu = nn.LazyLinear(latent_dim)
-        self.fc_logvar = nn.LazyLinear(latent_dim)
 
     def reparametrize(self, 
                       mu: torch.Tensor, 

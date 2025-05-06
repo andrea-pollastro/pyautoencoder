@@ -1,3 +1,4 @@
+from typing import List, Tuple
 import math
 import torch
 import torch.nn.functional as F
@@ -73,8 +74,8 @@ def ELBO(x: torch.Tensor,
     B, L = x_hat.size(0), x_hat.size(1)
 
     # Log-likelihood E_q[log p(x|z)]
-    x_expanded = x.unsqueeze(1).expand(-1, L, *([-1] * (x.ndim - 1)))
-    log_p_x_given_z = log_likelihood(x_expanded, x_hat, likelihood=likelihood, reduction='none')
+    x_exp = x.unsqueeze(1).expand(-1, L, *([-1] * (x.ndim - 1)))
+    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
     log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)
     log_p_x_given_z = log_p_x_given_z.mean(dim=1)
 
@@ -119,11 +120,11 @@ def IWAE_ELBO(x: torch.Tensor,
         - This implementation assumes a unit-variance standard normal prior p(z).
     """
     B, L = x_hat.size(0), x_hat.size(1)
-    x_expanded = x.unsqueeze(1).expand(B, L, *([-1] * (x.ndim - 1)))
+    x_exp = x.unsqueeze(1).expand(B, L, *([-1] * (x.ndim - 1)))
     log_2pi = torch.log(torch.tensor(2 * math.pi, device=z.device))
 
     # Log-likelihood p(x|z_i)
-    log_p_x_given_z = log_likelihood(x_expanded, x_hat, likelihood=likelihood, reduction='none')
+    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
     log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)
 
     # Prior p(z_i)
@@ -150,3 +151,52 @@ def IWAE_ELBO(x: torch.Tensor,
     kl_divergence = (log_q_z_given_x - log_p_z).mean()
 
     return elbo, log_p_x_given_z, kl_divergence
+
+def hierarchical_ELBO(x: torch.Tensor,
+                      x_hat: torch.Tensor,
+                      mus: List[torch.Tensor],
+                      log_vars: List[torch.Tensor],
+                      likelihood: str = 'gaussian',
+                      beta: float = 1.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Computes the ELBO for a Hierarchical VAE.
+
+    Args:
+        x (torch.Tensor): Original input of shape [B, ...].
+        x_hat (torch.Tensor): Reconstructed samples from z_1, shape [B, L, ...].
+        mus (List[torch.Tensor]): List of means from each q(z_l | ·), each shape [B, latent_dim_l].
+        log_vars (List[torch.Tensor]): List of log-variances from each q(z_l | ·), shape [B, latent_dim_l].
+        likelihood (str): Type of likelihood for reconstruction ('gaussian' or 'bernoulli').
+        beta (float): Weighting factor for total KL term (useful for beta-VAE).
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            - ELBO (scalar): Final ELBO estimate averaged over the batch.
+            - log_p_x_given_z (scalar): Expected log-likelihood term.
+            - kl_total (scalar): Total KL divergence across all latent layers.
+
+    Notes:
+        Assumes standard normal priors for all latent variables.
+    """
+    B, L = x_hat.shape[:2]
+
+    # Reconstruction term: E_q(z_1)[log p(x | z_1)]
+    x_exp = x.unsqueeze(1).expand_as(x_hat)
+    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
+    log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)  # [B, L]
+    log_p_x_given_z = log_p_x_given_z.mean(dim=1)  # [B]
+
+    # KL terms for each layer
+    kl_divergences = [
+        -0.5 * torch.sum(1 + lv - mu.pow(2) - lv.exp(), dim=-1)  # [B]
+        for mu, lv in zip(mus, log_vars)
+    ]
+    kl_total = sum(kl_divergences)  # still shape [B]
+
+    # ELBO
+    elbo_per_sample = log_p_x_given_z - beta * kl_total
+    elbo = elbo_per_sample.mean()
+    log_p_x_given_z = log_p_x_given_z.mean()
+    kl_total = kl_total.mean()
+
+    return elbo, log_p_x_given_z, kl_total

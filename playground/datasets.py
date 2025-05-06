@@ -199,5 +199,4 @@ def plot_latent_and_true_posterior(z: np.ndarray,
     axs[-1].axis("equal")
     axs[-1].grid(alpha=0.2)
 
-    plt.tight_layout()
-    plt.show()
+    return fig, axs
