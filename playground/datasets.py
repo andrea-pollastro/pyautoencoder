@@ -52,16 +52,16 @@ def generate_nonlinear_2D(z: np.ndarray, noise_std: float = 0.1) -> np.ndarray:
     noise = np.random.normal(0, noise_std, size=(z.shape[0], 2))
     return np.stack([x1, x2], axis=1) + noise
 
-def make_mixture_gaussian(n_samples: int = 1000,
-                          disposition: str = 'random', 
-                          n_components: int = 10, 
-                          cov_scaling: float = 0.02,
-                          spacing: float = .5,
-                          n_components_per_axis: int = 2,
-                          radius: float = 1, 
-                          generative_fn: Callable = generate_nonlinear_1D,
-                          generative_noise_std: float = 0.1,
-                          random_seed: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def make_from_mixture_gaussian(n_samples: int = 1000,
+                               disposition: str = 'random', 
+                               n_components: int = 10, 
+                               cov_scaling: float = 0.02,
+                               spacing: float = .5,
+                               n_components_per_axis: int = 2,
+                               radius: float = 1, 
+                               generative_fn: Callable = generate_nonlinear_1D,
+                               generative_noise_std: float = 0.1,
+                               random_seed: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Generates samples from a 2D latent mixture of Gaussians and applies a nonlinear generative function.
 
