@@ -9,14 +9,13 @@ def log_likelihood(x: torch.Tensor,
                    reduction: str = 'mean') -> torch.Tensor:
     """
     Computes the log-likelihood of the reconstructed tensor x_hat given the original tensor x,
-    under either a Bernoulli or Gaussian likelihood assumption with unit variance and i.i.d. samples.
+    under either a Bernoulli or Gaussian likelihood assumption with unit variance and i.i.d. samples,
+    without applying any reduction.
 
     Args:
         x (torch.Tensor): Ground truth input tensor.
         x_hat (torch.Tensor): Reconstructed tensor.
         likelihood (str): Type of likelihood model to use: 'bernoulli' or 'gaussian'.
-        reduction (str): Specifies the reduction to apply to the output: 
-                         'none' | 'mean' | 'sum'.
 
     Returns:
         torch.Tensor: The log-likelihood value (i.e., negative of the appropriate loss function 
@@ -36,11 +35,11 @@ def log_likelihood(x: torch.Tensor,
         raise ValueError(f"Unknown likelihood: '{likelihood}'. Choose 'bernoulli' or 'gaussian'.")
 
     if likelihood == 'bernoulli':
-        return -F.binary_cross_entropy(x_hat, x, reduction=reduction)
+        return -F.binary_cross_entropy(x_hat, x, reduction='none')
     
     if likelihood == 'gaussian':
         D = x[0].numel()
-        mse = F.mse_loss(x_hat, x, reduction=reduction)
+        mse = F.mse_loss(x_hat, x, reduction='none')
         norm_constant = 0.5 * D * math.log(2 * math.pi)
         return -0.5 * mse - norm_constant
     
@@ -121,13 +120,13 @@ def IWAE_ELBO(x: torch.Tensor,
     """
     B, L = x_hat.size(0), x_hat.size(1)
     x_exp = x.unsqueeze(1).expand(B, L, *([-1] * (x.ndim - 1)))
-    log_2pi = torch.log(torch.tensor(2 * math.pi, device=z.device))
 
     # Log-likelihood p(x|z_i)
     log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
     log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)
 
     # Prior p(z_i)
+    log_2pi = torch.log(torch.tensor(2 * math.pi, device=z.device))
     log_p_z = -0.5 * (z.pow(2) + log_2pi).sum(-1) # NOTE the sum across the dimensions, ok for normalization constant
 
     # Posterior q(z_i|x)
@@ -139,11 +138,8 @@ def IWAE_ELBO(x: torch.Tensor,
     # Note: log w_i = log(p(x,z_i)/q(z_i|x)) = log p(x|z_i) + log p(z_i) - log q(z_i|x)
     log_w = log_p_x_given_z + log_p_z - log_q_z_given_x
 
-    # Normalized importance weights
-    log_w_tilde = log_w - torch.logsumexp(log_w, dim=1, keepdim=True)
-    w_tilde = log_w_tilde.exp().detach()
-    
-    iwae_elbo_per_sample = (w_tilde * log_w).sum(-1)
+    # IWAE bound
+    iwae_elbo_per_sample = torch.logsumexp(log_w, dim=1) - math.log(L)
 
     # Final metrics
     elbo = iwae_elbo_per_sample.mean()
