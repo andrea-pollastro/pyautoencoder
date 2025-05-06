@@ -4,7 +4,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-class VariationalAutoencoder(BaseVAE):
+class VAE(BaseVAE):
     """
     Standard Variational Autoencoder (VAE) implementation using the reparameterization trick.
 
