@@ -61,7 +61,7 @@ class VAE(BaseVAE):
         # z ~ q(z|x)
         z = self.reparametrize(mu=mu, log_var=log_var, L=L)
 
-        # p(z|x)
+        # p(x|z)
         z_flat = z.reshape(B * L, -1)
         x_hat = self.decoder(z_flat)
         x_hat = x_hat.view(B, L, *x.shape[1:])
