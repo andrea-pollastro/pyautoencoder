@@ -1,10 +1,10 @@
-from .base import BaseVAE
+from .stochastic_layers import IsotropicGaussian
 from utils.loss import ELBO
 from typing import Tuple
 import torch
 import torch.nn as nn
 
-class VAE(BaseVAE):
+class VAE(nn.Module):
     """
     Standard Variational Autoencoder (VAE) implementation using the reparameterization trick.
 
@@ -20,14 +20,17 @@ class VAE(BaseVAE):
     def __init__(self, 
                  encoder: nn.Module, 
                  decoder: nn.Module, 
-                 latent_dim: int):
+                 latent_dim: int,
+                 sampling_layer: str = 'isotropic_gaussian'):
         super().__init__()
+        
+        assert sampling_layer in ['isotropic_gaussian'], \
+            'Sampling layers available: isotropic_gaussian'
 
         self.latent_dim = latent_dim
         self.encoder = encoder
         self.decoder = decoder
-        self.fc_mu = nn.LazyLinear(latent_dim)
-        self.fc_logvar = nn.LazyLinear(latent_dim)
+        self.gaussian_layer = IsotropicGaussian(latent_dim=latent_dim)
         
         self.elbo = ELBO
 
@@ -55,11 +58,9 @@ class VAE(BaseVAE):
 
         # q(z|x)
         x_f = self.encoder(x).flatten(1)
-        mu = self.fc_mu(x_f)
-        log_var = self.fc_logvar(x_f)
 
         # z ~ q(z|x)
-        z = self.reparametrize(mu=mu, log_var=log_var, L=L)
+        z, mu, log_var = self.gaussian_layer(x=x_f, L=L)
 
         # p(x|z)
         z_flat = z.reshape(B * L, -1)
