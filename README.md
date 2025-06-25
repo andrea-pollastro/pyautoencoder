@@ -1,6 +1,6 @@
 # pyautoencoders
 
-**pyautoencoders** is a lightweight PyTorch package offering clean, minimal implementations of foundational autoencoder architectures. 
+**pyautoencoders** is a lightweight Python package offering clean, minimal implementations of foundational autoencoder architectures in PyTorch. 
 It is designed for researchers, educators, and practitioners seeking a reliable base for experimentation, extension, or instruction.
 
 ## 📦 Installation
