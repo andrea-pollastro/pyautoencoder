@@ -1,5 +1,4 @@
 from .stochastic_layers import FullyFactorizedGaussian
-from utils.loss import ELBO
 from typing import Tuple
 import torch
 import torch.nn as nn
