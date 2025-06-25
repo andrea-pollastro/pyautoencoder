@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo_nobackground.png" alt="pyautoencoders_logo" width="200"/>
+  <img src="assets/logo_nobackground.png" alt="pyautoencoders_logo" width="500"/>
 </p>
 
 **pyautoencoder** is a lightweight Python package offering clean, minimal implementations of foundational autoencoder architectures in PyTorch. 
