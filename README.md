@@ -2,19 +2,19 @@
   <img src="assets/logo_nobackground.png" alt="pyautoencoders_logo" width="200"/>
 </p>
 
-**pyautoencoders** is a lightweight Python package offering clean, minimal implementations of foundational autoencoder architectures in PyTorch. 
+**pyautoencoder** is a lightweight Python package offering clean, minimal implementations of foundational autoencoder architectures in PyTorch. 
 It is designed for researchers, educators, and practitioners seeking a reliable base for experimentation, extension, or instruction.
 
 ## 📦 Installation
 
 ```bash
-pip install pyautoencoders
+pip install pyautoencoder
 ```
 
 Or install from source:
 ```bash
-git clone https://github.com/andrea-pollastro/pyautoencoders.git
-cd pyautoencoders
+git clone https://github.com/andrea-pollastro/pyautoencoder.git
+cd pyautoencoder
 pip install -e .
 ```
 
@@ -22,7 +22,7 @@ pip install -e .
 
 ```python
 import torch
-from pyautoencoders.models import Autoencoder
+from pyautoencoder.models import Autoencoder
 
 # Define encoder and decoder
 encoder = torch.nn.Sequential(
