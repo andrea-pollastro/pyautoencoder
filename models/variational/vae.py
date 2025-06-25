@@ -1,10 +1,10 @@
-from .stochastic_layers import IsotropicGaussian
+from .stochastic_layers import FullyFactorizedGaussian
 from utils.loss import ELBO
 from typing import Tuple
 import torch
 import torch.nn as nn
 
-class VAE(nn.Module):
+class VariationalAutoencoder(nn.Module):
     """
     Standard Variational Autoencoder (VAE) implementation using the reparameterization trick.
 
@@ -21,16 +21,16 @@ class VAE(nn.Module):
                  encoder: nn.Module, 
                  decoder: nn.Module, 
                  latent_dim: int,
-                 sampling_layer: str = 'isotropic_gaussian'):
+                 sampling_layer: str = 'fully_factorized_gaussian'):
         super().__init__()
-        
-        assert sampling_layer in ['isotropic_gaussian'], \
-            'Sampling layers available: isotropic_gaussian'
 
         self.latent_dim = latent_dim
         self.encoder = encoder
         self.decoder = decoder
-        self.gaussian_layer = IsotropicGaussian(latent_dim=latent_dim)
+        if sampling_layer == 'fully_factorized_gaussian':
+            self.gaussian_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
+        else:
+            raise ValueError(f'Sampling layer {sampling_layer} not available.')
         
         self.elbo = ELBO
 
@@ -56,10 +56,8 @@ class VAE(nn.Module):
         """
         B = x.size(0)
 
-        # q(z|x)
-        x_f = self.encoder(x).flatten(1)
-
         # z ~ q(z|x)
+        x_f = self.encoder(x)
         z, mu, log_var = self.gaussian_layer(x=x_f, L=L)
 
         # p(x|z)

@@ -1,12 +1,10 @@
-from typing import List, Tuple
 import math
 import torch
 import torch.nn.functional as F
 
 def log_likelihood(x: torch.Tensor, 
                    x_hat: torch.Tensor, 
-                   likelihood: str = 'gaussian',
-                   reduction: str = 'mean') -> torch.Tensor:
+                   likelihood: str = 'gaussian') -> torch.Tensor:
     """
     Computes the log-likelihood of the reconstructed tensor x_hat given the original tensor x,
     under either a Bernoulli or Gaussian likelihood assumption with unit variance and i.i.d. samples,
@@ -74,7 +72,7 @@ def ELBO(x: torch.Tensor,
 
     # Log-likelihood E_q[log p(x|z)]
     x_exp = x.unsqueeze(1).expand(-1, L, *([-1] * (x.ndim - 1)))
-    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
+    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood)
     log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)
     log_p_x_given_z = log_p_x_given_z.mean(dim=1)
 
@@ -88,62 +86,5 @@ def ELBO(x: torch.Tensor,
     elbo = elbo_per_sample.mean()
     log_p_x_given_z = log_p_x_given_z.mean()
     kl_divergence = kl_divergence.mean()
-
-    return elbo, log_p_x_given_z, kl_divergence
-
-def IWAE_ELBO(x: torch.Tensor, 
-              x_hat: torch.Tensor, 
-              z: torch.Tensor, 
-              mu: torch.Tensor, 
-              log_var: torch.Tensor,
-              likelihood: str = 'gaussian') -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Computes the IWAE (Importance Weighted Autoencoder) ELBO.
-
-    Args:
-        x (torch.Tensor): Original input tensor of shape [B, ...].
-        x_hat (torch.Tensor): Reconstructed samples of shape [B, L, ...], where L is the number of latent samples.
-        z (torch.Tensor): Latent samples drawn from q(z|x), shape [B, L, latent_dim].
-        mu (torch.Tensor): Mean of q(z|x), shape [B, latent_dim].
-        log_var (torch.Tensor): Log-variance of q(z|x), shape [B, latent_dim].
-        likelihood (str): Likelihood model to use: 'gaussian' or 'bernoulli'.
-
-    Returns:
-        tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-            - IWAE ELBO (scalar): The estimated tighter lower bound.
-            - log_p_x_given_z (scalar): Mean reconstruction log-likelihood.
-            - kl_divergence (scalar): Mean KL divergence between q(z|x) and p(z).
-
-    Notes:
-        - Importance weights are normalized using a softmax-like operation on log-space to improve numerical stability.
-        - This implementation assumes a unit-variance standard normal prior p(z).
-    """
-    B, L = x_hat.size(0), x_hat.size(1)
-    x_exp = x.unsqueeze(1).expand(B, L, *([-1] * (x.ndim - 1)))
-
-    # Log-likelihood p(x|z_i)
-    log_p_x_given_z = log_likelihood(x_exp, x_hat, likelihood=likelihood, reduction='none')
-    log_p_x_given_z = log_p_x_given_z.view(B, L, -1).sum(-1)
-
-    # Prior p(z_i)
-    log_2pi = torch.log(torch.tensor(2 * math.pi, device=z.device))
-    log_p_z = -0.5 * (z.pow(2) + log_2pi).sum(-1) # NOTE the sum across the dimensions, ok for normalization constant
-
-    # Posterior q(z_i|x)
-    mu_expanded = mu.unsqueeze(1).expand(B, L, *([-1] * (mu.ndim - 1)))
-    log_var_expanded = log_var.unsqueeze(1).expand(B, L, *([-1] * (log_var.ndim - 1)))
-    log_q_z_given_x = -0.5 * (((z - mu_expanded)**2) / log_var_expanded.exp() + log_var_expanded + log_2pi).sum(-1)
-
-    # Importance weights
-    # Note: log w_i = log(p(x,z_i)/q(z_i|x)) = log p(x|z_i) + log p(z_i) - log q(z_i|x)
-    log_w = log_p_x_given_z + log_p_z - log_q_z_given_x
-
-    # IWAE bound
-    iwae_elbo_per_sample = torch.logsumexp(log_w, dim=1) - math.log(L)
-
-    # Final metrics
-    elbo = iwae_elbo_per_sample.mean()
-    log_p_x_given_z = log_p_x_given_z.mean()
-    kl_divergence = (log_q_z_given_x - log_p_z).mean()
 
     return elbo, log_p_x_given_z, kl_divergence

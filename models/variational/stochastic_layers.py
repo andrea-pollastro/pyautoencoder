@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class IsotropicGaussian(nn.Module):
+class FullyFactorizedGaussian(nn.Module):
     def __init__(self, latent_dim: int):
         super().__init__()
         self.mu = nn.LazyLinear(latent_dim)
@@ -20,7 +20,7 @@ class IsotropicGaussian(nn.Module):
         """
         mu = self.mu(x)
         log_var = self.log_var(x)
-        
+
         if self.training:
             std = torch.exp(0.5 * log_var)
             mu = mu.unsqueeze(1).expand(-1, L, -1)

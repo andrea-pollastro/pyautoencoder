@@ -14,8 +14,9 @@ class Autoencoder(nn.Module):
         encoder (nn.Module): A neural network that encodes the input into a latent representation.
         decoder (nn.Module): A neural network that decodes the latent representation back to the input space.
 
-    Forward Args:
-        x (torch.Tensor): Input tensor of shape [B, ...].
+    Methods:
+        forward(x): Computes the reconstructed input and latent representation.
+        encode(x): Returns the latent representation without computing gradients (inference mode) and in eval mode.
 
     Returns:
         Tuple[torch.Tensor, torch.Tensor]:
@@ -33,3 +34,8 @@ class Autoencoder(nn.Module):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         return x_hat, z
+    
+    @torch.inference_mode()
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        self.eval()
+        return self.encoder(x)
