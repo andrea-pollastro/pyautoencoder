@@ -55,7 +55,7 @@ Please open an issue or pull request to discuss any changes.
 
 ## 📝 Citing
 ```bibtex
-@misc{pollastro:2025,
+@misc{pollastro2025pyautoencoder,
   Author = {Andrea Pollastro},
   Title = {pyautoencoder},
   Year = {2025},
