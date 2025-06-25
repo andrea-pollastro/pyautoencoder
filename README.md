@@ -53,5 +53,17 @@ x_hat, z = model(x)
 Contributions are welcome — especially new autoencoder variants, training examples, and documentation improvements.
 Please open an issue or pull request to discuss any changes.
 
+## 📝 Citing
+```bibtex
+@misc{pollastro:2025,
+  Author = {Andrea Pollastro},
+  Title = {pyautoencoder},
+  Year = {2025},
+  Publisher = {GitHub},
+  Journal = {GitHub repository},
+  Howpublished = {\url{https://github.com/andrea-pollastro/pyautoencoder}}
+}
+```
+
 ## 📄 License
 This project is licensed under the MIT License. See the LICENSE file for details.
