@@ -28,12 +28,10 @@ class VariationalAutoencoder(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
         if sampling_layer == 'fully_factorized_gaussian':
-            self.gaussian_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
+            self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
         else:
             raise ValueError(f'Sampling layer {sampling_layer} not available.')
         
-        self.elbo = ELBO
-
     def forward(self, 
                 x: torch.Tensor, 
                 L: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -58,7 +56,7 @@ class VariationalAutoencoder(nn.Module):
 
         # z ~ q(z|x)
         x_f = self.encoder(x)
-        z, mu, log_var = self.gaussian_layer(x=x_f, L=L)
+        z, mu, log_var = self.sampling_layer(x=x_f, L=L)
 
         # p(x|z)
         z_flat = z.reshape(B * L, -1)

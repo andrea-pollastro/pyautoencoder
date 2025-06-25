@@ -11,7 +11,7 @@ pip install pyautoencoders
 
 Or install from source:
 ```bash
-git clone https://github.com/yourusername/pyautoencoders.git
+git clone https://github.com/andrea-pollastro/pyautoencoders.git
 cd pyautoencoders
 pip install -e .
 ```
@@ -39,9 +39,6 @@ model = Autoencoder(encoder, decoder)
 # Forward pass
 x = torch.randn(64, 1, 28, 28)
 x_hat, z = model(x)
-
-# Log-likelihood
-log_likelihood = model.log_likelihood(x_hat, x)
 ```
 
 ## 🗺️ Roadmap

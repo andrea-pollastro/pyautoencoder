@@ -28,7 +28,6 @@ class Autoencoder(nn.Module):
         
         self.encoder = encoder
         self.decoder = decoder
-        self.log_likelihood = log_likelihood
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         z = self.encoder(x)
