@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="pyautoencoder",
     version="1.0.0",
-    description="PyTorch implementations of state-of-the-art autoencoder architectures.",
+    description="A Python package offering implementations of state-of-the-art autoencoder architectures in PyTorch.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     author="Andrea Pollastro",
