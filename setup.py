@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyautoencoder",
-    version="1.0.0",
+    version="1.0.3",
     description="A Python package offering implementations of state-of-the-art autoencoder architectures in PyTorch.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
@@ -14,7 +14,7 @@ setup(
         "torch>=2.0.0"
     ],
     keywords=[
-        "autoencoder", "vae", "pytorch", "deep learning",
+        "autoencoder", "pytorch", "deep learning",
         "machine learning", "representation learning", "dimensionality reduction",
         "generative models"
     ],
@@ -23,12 +23,7 @@ setup(
         "Intended Audience :: Science/Research",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
