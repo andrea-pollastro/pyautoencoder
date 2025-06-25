@@ -1,17 +1,6 @@
 ![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
-
-<p align="center">
-  <a href="https://pypi.org/project/pyautoencoder/">
-    <img src="https://img.shields.io/pypi/v/pyautoencoder.svg?color=orange&label=pypi" alt="PyPI version">
-  </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/github/license/andrea-pollastro/pyautoencoder.svg" alt="License">
-  </a>
-</p>
-
-
-**pyautoencoder** is a lightweight Python package offering clean, minimal implementations of foundational autoencoder architectures in PyTorch. 
-It is designed for researchers, educators, and practitioners seeking a reliable base for experimentation, extension, or instruction.
+[![PyPI version](https://img.shields.io/pypi/v/pyautoencoder.svg?color=orange&label=pypi)](https://pypi.org/project/pyautoencoder/)
+[![License](https://img.shields.io/github/license/andrea-pollastro/pyautoencoder.svg)](https://opensource.org/licenses/MIT)
 
 ## 📦 Installation
 
