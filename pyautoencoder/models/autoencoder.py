@@ -32,8 +32,3 @@ class Autoencoder(nn.Module):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         return x_hat, z
-    
-    @torch.inference_mode()
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        self.eval()
-        return self.encoder(x)
