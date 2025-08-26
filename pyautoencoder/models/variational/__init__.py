@@ -1,3 +1,3 @@
-from .vae import VariationalAutoencoder
+from .vae import VAE
 
-__all__ = ['VariationalAutoencoder']
+__all__ = ['VAE']

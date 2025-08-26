@@ -1,65 +1,99 @@
-from .stochastic_layers import FullyFactorizedGaussian
 from typing import Tuple
 import torch
 import torch.nn as nn
+from ..base import BaseVariationalAutoencoder
+from .stochastic_layers import FullyFactorizedGaussian
 
-class VariationalAutoencoder(nn.Module):
+class VAE(BaseVariationalAutoencoder):
     """
-    Standard Variational Autoencoder (VAE) implementation using the reparameterization trick.
+    Standard Variational Autoencoder (VAE) with a single latent layer.
+    Implementation of "Kingma, D. P., & Welling, M. (2013). Auto-encoding variational bayes."
 
-    This model assumes a single latent layer and consists of:
-    - an encoder producing parameters of the approximate posterior q(z|x),
-    - a decoder reconstructing the input from latent samples z.
-
-    Args:
-        encoder (nn.Module): Encoder network mapping input x to a latent representation.
-        decoder (nn.Module): Decoder network reconstructing x from latent variable z.
-        latent_dim (int): Dimensionality of the latent space.
+    Components:
+        - encoder: x → features f(x)  (shape [B, F])
+        - decoder: z → x_hat
     """
-    def __init__(self, 
-                 encoder: nn.Module, 
-                 decoder: nn.Module, 
-                 latent_dim: int,
-                 sampling_layer: str = 'fully_factorized_gaussian'):
+    def __init__(
+        self,
+        encoder: nn.Module,
+        decoder: nn.Module,
+        latent_dim: int,
+    ):
+        """
+        Args:
+            encoder (nn.Module): Network mapping input x to feature vector f(x), shape [B, F].
+            decoder (nn.Module): Network mapping latent z to reconstruction x_hat.
+            latent_dim (int): Dimensionality of the latent space (D_z).
+        """
         super().__init__()
-
-        self.latent_dim = latent_dim
         self.encoder = encoder
         self.decoder = decoder
-        if sampling_layer == 'fully_factorized_gaussian':
-            self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
-        else:
-            raise ValueError(f'Sampling layer {sampling_layer} not available.')
-        
-    def forward(self, 
-                x: torch.Tensor, 
-                L: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Forward pass of the VAE.
+        self.latent_dim = latent_dim
+        self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
 
-        Encodes the input to obtain parameters of q(z|x), samples latent variables z using
-        the reparameterization trick, and decodes z to reconstruct the input.
+    def _encode(self, x: torch.Tensor, S: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Encodes inputs and draws latent samples via the sampling layer.
 
         Args:
-            x (torch.Tensor): Input tensor of shape [B, ...], where B is the batch size.
-            L (int): Number of samples per input for Monte Carlo estimates (default: 1).
+            x (torch.Tensor): Inputs, shape [B, ...]. The encoder must output a flat feature
+                              vector per sample (e.g., [B, F]) compatible with the sampling head.
+            S (int): Number of Monte Carlo samples per input.
 
         Returns:
-            Tuple containing:
-                - x_hat (torch.Tensor): Reconstructed inputs, shape [B, L, ...].
-                - z (torch.Tensor): Sampled latent variables, shape [B, L, latent_dim].
-                - mu (torch.Tensor): Mean of q(z|x), shape [B, latent_dim].
-                - log_var (torch.Tensor): Log-variance of q(z|x), shape [B, latent_dim].
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                - z       (torch.Tensor): Latent samples, shape [B, S, D_z].
+                - mu      (torch.Tensor): Mean of q(z|x), shape [B, D_z].
+                - log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
+
+        Notes:
+            - The sampling layer follows the module's training mode by default
+              (samples in train mode; tiles μ in eval).
         """
-        B = x.size(0)
+        f = self.encoder(x)                      # [B, F]
+        z, mu, log_var = self.sampling_layer(f, S=S)  # z: [B, S, D_z]
+        return z, mu, log_var
 
-        # z ~ q(z|x)
-        x_f = self.encoder(x)
-        z, mu, log_var = self.sampling_layer(x=x_f, L=L)
+    def _decode(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        Decodes latent variables to reconstruction logits (or means).
 
-        # p(x|z)
-        z_flat = z.reshape(B * L, -1)
-        x_hat = self.decoder(z_flat)
-        x_hat = x_hat.view(B, L, *x.shape[1:])
+        Args:
+            z (torch.Tensor): Latent inputs, shape **[B, S, D_z]** (S is kept even when S=1).
 
+        Returns:
+            torch.Tensor: Reconstructions x_hat, shape **[B, S, ...]**.
+
+        Notes:
+            - This method reshapes internally: flattens the (B·S) batch, applies the decoder,
+              then restores [B, S, ...]. No additional reshaping is needed in `forward`.
+        """
+        if z.dim() != 3:
+            raise ValueError(f"Expected z with shape [B, S, D_z]; got {tuple(z.shape)}")
+        B, S, D_z = z.shape
+        x_hat = self.decoder(z.reshape(B * S, D_z))   # [B*S, ...]
+        return x_hat.view(B, S, *x_hat.shape[1:])     # [B, S, ...]
+
+    def forward(self, x: torch.Tensor, S: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Runs the VAE pipeline: encode → (sample S) → decode.
+
+        Args:
+            x (torch.Tensor): Inputs, shape [B, ...].
+            S (int): Number of latent samples per input for Monte Carlo estimates.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+                - x_hat  (torch.Tensor): Reconstructions/logits,  shape [B, S, ...].
+                - z      (torch.Tensor): Latent samples,          shape [B, S, D_z].
+                - mu     (torch.Tensor): Mean of q(z|x),          shape [B, D_z].
+                - log_var(torch.Tensor): Log-variance of q(z|x),  shape [B, D_z].
+
+        Notes:
+            - When S > 1, broadcasting x → [B, S, ...] during loss computation allows
+              evaluating log p(x | z_s) for each sample without copying x.
+            - For Bernoulli likelihoods, ensure the decoder outputs logits.
+        """
+        z, mu, log_var = self._encode(x, S=S)  # z: [B, S, D_z]
+        x_hat = self._decode(z)                # [B, S, ...]
         return x_hat, z, mu, log_var

@@ -1,4 +1,4 @@
-from .autoencoder import Autoencoder
-from .variational import VariationalAutoencoder
+from .autoencoder import AE
+from .variational.vae import VAE
 
-__all__ = ['VariationalAutoencoder', 'Autoencoder']
+__all__ = ['VAE', 'AE']
