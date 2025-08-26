@@ -1,10 +1,49 @@
-from typing import Tuple
 import torch
 import torch.nn as nn
-from ..base import BaseVariationalAutoencoder
+from dataclasses import dataclass
+
+from ..base import BaseAutoencoder, ModelOutput
 from .stochastic_layers import FullyFactorizedGaussian
 
-class VAE(BaseVariationalAutoencoder):
+@dataclass(slots=True)
+class VAEEncodeOutput(ModelOutput):
+    """Output of VAE._encode / VAE.encode.
+
+    Attributes:
+        z       (torch.Tensor): Latent samples, shape [B, S, D_z] (S can be 1).
+        mu      (torch.Tensor): Mean of q(z|x), shape [B, D_z].
+        log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
+    """
+    z: torch.Tensor
+    mu: torch.Tensor
+    log_var: torch.Tensor
+
+@dataclass(slots=True)
+class VAEDecodeOutput(ModelOutput):
+    """Output of VAE._decode / VAE.decode.
+
+    Attributes:
+        x_hat (torch.Tensor): Reconstructions/logits, shape [B, S, ...] 
+    """
+    x_hat: torch.Tensor
+
+
+@dataclass(slots=True)
+class VAEOutput(ModelOutput):
+    """Output of VAE.forward.
+
+    Attributes:
+        x_hat   (torch.Tensor): Reconstructions/logits,  shape [B, S, ...].
+        z       (torch.Tensor): Latent samples,          shape [B, S, D_z].
+        mu      (torch.Tensor): Mean of q(z|x),          shape [B, D_z].
+        log_var (torch.Tensor): Log-variance of q(z|x),  shape [B, D_z].
+    """
+    x_hat: torch.Tensor
+    z: torch.Tensor
+    mu: torch.Tensor
+    log_var: torch.Tensor
+
+class VAE(BaseAutoencoder):
     def __init__(
         self,
         encoder: nn.Module,
@@ -13,16 +52,18 @@ class VAE(BaseVariationalAutoencoder):
     ):
         """
         Standard Variational Autoencoder (VAE) with a single latent layer.
-        Implementation following "Kingma, D. P., & Welling, M. (2013). Auto-encoding variational bayes."
+        Follows Kingma & Welling (2013), "Auto-Encoding Variational Bayes".
 
         Components:
-            - encoder: x → features f(x)  (shape [B, F])
+            - encoder: x → features extracted f(x) before sampling layer (shape [B, F])
+            - sampling_layer: (μ, log σ², S) → z                         (shape [B, S, D_z])
             - decoder: z → x_hat
 
         Args:
-            encoder (nn.Module): Network mapping input x to feature vector f(x), shape [B, F].
-            decoder (nn.Module): Network mapping latent z to reconstruction x_hat.
-            latent_dim (int): Dimensionality of the latent space (D_z).
+            encoder (nn.Module): Maps input x to feature vector f(x), shape [B, F],
+                                 internally producing μ and log σ² for q(z|x).
+            decoder (nn.Module): Maps latent z to reconstruction x_hat.
+            latent_dim (int):    Dimensionality of the latent space (D_z).
         """
         super().__init__()
         self.encoder = encoder
@@ -30,69 +71,64 @@ class VAE(BaseVariationalAutoencoder):
         self.latent_dim = latent_dim
         self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
 
-    def _encode(self, x: torch.Tensor, S: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Encodes inputs and draws latent samples via the sampling layer.
+    # --- training-time hooks required by BaseAutoencoder ---
+    def _encode(self, x: torch.Tensor, S: int = 1) -> VAEEncodeOutput:
+        """Encode inputs and draw S latent samples via the sampling layer.
 
         Args:
             x (torch.Tensor): Inputs, shape [B, ...]. The encoder must output a flat feature
-                              vector per sample (e.g., [B, F]) compatible with the sampling head.
+                              vector per sample compatible with the sampling head.
             S (int): Number of Monte Carlo samples per input.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-                - z       (torch.Tensor): Latent samples, shape [B, S, D_z].
-                - mu      (torch.Tensor): Mean of q(z|x), shape [B, D_z].
-                - log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
+            VAEEncodeOutput with:
+                - z:       [B, S, D_z]
+                - mu:      [B, D_z]
+                - log_var: [B, D_z]
 
         Notes:
-            - The sampling layer follows the module's training mode by default
-              (samples in train mode; tiles μ in eval).
+            The sampling layer typically follows module training mode:
+              - train(): sample from q(z|x)
+              - eval():  tile μ (or use deterministic behavior)
         """
-        f = self.encoder(x)                      # [B, F]
-        z, mu, log_var = self.sampling_layer(f, S=S)  # z: [B, S, D_z]
-        return z, mu, log_var
+        f = self.encoder(x)
+        z, mu, log_var = self.sampling_layer(f, S=S)
+        return VAEEncodeOutput(z=z, mu=mu, log_var=log_var)
 
-    def _decode(self, z: torch.Tensor) -> torch.Tensor:
-        """
-        Decodes latent variables to reconstruction logits (or means).
+    def _decode(self, z: torch.Tensor) -> VAEDecodeOutput:
+        """Decode latent variables to reconstruction logits (or means).
 
         Args:
-            z (torch.Tensor): Latent inputs, shape **[B, S, D_z]** (S is kept even when S=1).
+            z (torch.Tensor): Latent inputs, shape [B, S, D_z].
 
         Returns:
-            torch.Tensor: Reconstructions x_hat, shape **[B, S, ...]**.
-
-        Notes:
-            - This method reshapes internally: flattens the (B·S) batch, applies the decoder,
-              then restores [B, S, ...]. No additional reshaping is needed in `forward`.
+            VAEDecodeOutput with:
+                - x_hat: [B, S, ...]
         """
-        if z.dim() != 3:
-            raise ValueError(f"Expected z with shape [B, S, D_z]; got {tuple(z.shape)}")
         B, S, D_z = z.shape
-        x_hat = self.decoder(z.reshape(B * S, D_z))   # [B*S, ...]
-        return x_hat.view(B, S, *x_hat.shape[1:])     # [B, S, ...]
+        x_hat_flat = self.decoder(z.reshape(B * S, D_z))  # [B * S, ...]
+        x_hat = x_hat_flat.reshape(B, S, *x_hat_flat.shape[1:])
+        return VAEDecodeOutput(x_hat=x_hat)
 
-    def forward(self, x: torch.Tensor, S: int = 1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Runs the VAE pipeline: encode → (sample S) → decode.
+    def forward(self, x: torch.Tensor, S: int = 1) -> VAEOutput:
+        """Full VAE pass: encode → sample S → decode.
 
         Args:
             x (torch.Tensor): Inputs, shape [B, ...].
             S (int): Number of latent samples per input for Monte Carlo estimates.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-                - x_hat  (torch.Tensor): Reconstructions/logits,  shape [B, S, ...].
-                - z      (torch.Tensor): Latent samples,          shape [B, S, D_z].
-                - mu     (torch.Tensor): Mean of q(z|x),          shape [B, D_z].
-                - log_var(torch.Tensor): Log-variance of q(z|x),  shape [B, D_z].
+            VAEOutput with:
+                - x_hat:  Reconstructions/logits,  shape [B, S, ...]
+                - z:      Latent samples,          shape [B, S, D_z]
+                - mu:     Mean of q(z|x),          shape [B, D_z]
+                - log_var:Log-variance of q(z|x),  shape [B, D_z]
 
         Notes:
-            - When S > 1, broadcasting x → [B, S, ...] during loss computation allows
-              evaluating log p(x | z_s) for each sample without copying x.
-            - For Bernoulli likelihoods, ensure the decoder outputs logits.
+            When S > 1, you can broadcast x to [B, S, ...] during loss computation
+            to evaluate log p(x | z_s) for each sample without copying x.
+            For Bernoulli likelihoods, the decoder should output logits.
         """
-        z, mu, log_var = self._encode(x, S=S)  # z: [B, S, D_z]
-        x_hat = self._decode(z)                # [B, S, ...]
-        return x_hat, z, mu, log_var
+        enc = self._encode(x, S=S) # VAEEncodeOutput(z, mu, log_var)
+        dec = self._decode(enc.z)  # VAEDecodeOutput(x_hat)
+        return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)

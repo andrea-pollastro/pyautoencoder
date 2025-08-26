@@ -1,6 +1,7 @@
 """Loss functions for variational autoencoders with rigorous mathematical implementations."""
 import torch
 from typing import Union, NamedTuple
+
 from .base import log_likelihood, LikelihoodType
 
 class ELBOComponents(NamedTuple):

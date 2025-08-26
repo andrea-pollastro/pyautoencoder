@@ -1,39 +1,87 @@
-from typing import Tuple
 import torch
 import torch.nn as nn
-from .base import BaseAutoencoder
+from dataclasses import dataclass
+
+from .base import BaseAutoencoder, ModelOutput
+
+@dataclass(slots=True)
+class AEEncodeOutput(ModelOutput):
+    """Output of AE._encode / AE.encode.
+
+    Attributes:
+        z (torch.Tensor): Latent code, shape [B, ...].
+    """
+    z: torch.Tensor
+
+@dataclass(slots=True)
+class AEDecodeOutput(ModelOutput):
+    """Output of AE._decode / AE.decode.
+
+    Attributes:
+        x_hat (torch.Tensor): Reconstruction/logits, shape [B, ...].
+    """
+    x_hat: torch.Tensor
+
+@dataclass(slots=True)
+class AEOutput(ModelOutput):
+    """Output of AE.forward.
+
+    Attributes:
+        x_hat (torch.Tensor): Reconstruction/logits, shape [B, ...].
+        z     (torch.Tensor): Latent code,           shape [B, ...].
+    """
+    x_hat: torch.Tensor
+    z: torch.Tensor
 
 class AE(BaseAutoencoder):
     def __init__(self, encoder: nn.Module, decoder: nn.Module):
         """
         A simple Autoencoder model.
 
-        This class wraps a user-defined encoder and decoder.
-        The encoder maps the input x to a latent representation z, and the decoder
-        reconstructs x_hat from z.
-
-        Args:
-            encoder (nn.Module): Network mapping x -> z.
-            decoder (nn.Module): Network mapping z -> x_hat.
-
-        Methods:
-            forward(x): Training forward with gradients; returns (x_hat, z).
-            encode(x, use_eval=True): Inference wrapper (no grad, optional eval()) inherited from BaseAutoencoder.
-            decode(z, use_eval=True): Inference wrapper (no grad, optional eval()) inherited from BaseAutoencoder.
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]:
-                - x_hat: Reconstruction/logits, shape [B, ...].
-                - z:     Latent code,        shape [B, D_z] (or similar).
+        Wraps a user-defined encoder and decoder:
+          - encoder: x -> z
+          - decoder: z -> x_hat
         """
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
 
-    def _encode(self, x: torch.Tensor) -> torch.Tensor: return self.encoder(x)
-    def _decode(self, z: torch.Tensor) -> torch.Tensor: return self.decoder(z)
+    # --- training-time hooks required by BaseAutoencoder ---
+    def _encode(self, x: torch.Tensor) -> AEEncodeOutput:
+        """Compute latent representation.
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        z = self._encode(x)
-        x_hat = self._decode(z)
-        return x_hat, z
+        Args:
+            x: Input tensor, shape [B, ...].
+
+        Returns:
+            AEEncodeOutput: with field `z` of shape [B, ...].
+        """
+        z = self.encoder(x)
+        return AEEncodeOutput(z=z)
+
+    def _decode(self, z: torch.Tensor) -> AEDecodeOutput:
+        """Decode latent to reconstruction/logits.
+
+        Args:
+            z: Latent tensor, shape [B, ...].
+
+        Returns:
+            AEDecodeOutput: with field `x_hat` of shape [B, ...].
+        """
+        x_hat = self.decoder(z)
+        return AEDecodeOutput(x_hat=x_hat)
+
+    def forward(self, x: torch.Tensor) -> AEOutput:
+        """Training forward pass with gradients.
+
+        Args:
+            x: Input tensor, shape [B, ...].
+
+        Returns:
+            AEOutput with:
+                - x_hat: Reconstruction/logits, shape [B, ...]
+                - z:     Latent code,           shape [B, ...]
+        """
+        enc = self._encode(x)      # AEEncodeOutput(z)
+        dec = self._decode(enc.z)  # AEDecodeOutput(x_hat)
+        return AEOutput(x_hat=dec.x_hat, z=enc.z)
