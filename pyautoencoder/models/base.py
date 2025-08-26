@@ -2,12 +2,27 @@ from typing import Any
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 @dataclass(slots=True)
 class ModelOutput(ABC):
-    """Marker base class for all model outputs."""
-    pass
+    """Marker base class for all model outputs with a smart repr."""
+
+    def __repr__(self) -> str:
+        parts = []
+        for f in fields(self):  # works with slots (no __dict__)
+            name = f.name
+            value = getattr(self, name)
+            if isinstance(value, torch.Tensor):
+                parts.append(
+                    f"{name}=Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
+                )
+            else:
+                s = repr(value)
+                if len(s) > 80:  # optional truncation
+                    s = s[:77] + "..."
+                parts.append(f"{name}={s}")
+        return f"{self.__class__.__name__}({', '.join(parts)})"
 
 class BaseAutoencoder(nn.Module, ABC):
     """

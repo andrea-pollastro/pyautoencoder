@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .base import BaseAutoencoder, ModelOutput
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class AEEncodeOutput(ModelOutput):
     """Output of AE._encode / AE.encode.
 
@@ -13,7 +13,7 @@ class AEEncodeOutput(ModelOutput):
     """
     z: torch.Tensor
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class AEDecodeOutput(ModelOutput):
     """Output of AE._decode / AE.decode.
 
@@ -22,7 +22,7 @@ class AEDecodeOutput(ModelOutput):
     """
     x_hat: torch.Tensor
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class AEOutput(ModelOutput):
     """Output of AE.forward.
 

@@ -47,6 +47,7 @@ for epoch in range(100):
         
         # Forward pass
         output = model(x)
+        print(output)
         loss_info = loss_fn(output, x)
         
         # Compute gradients and update parameters

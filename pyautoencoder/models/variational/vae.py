@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..base import BaseAutoencoder, ModelOutput
 from .stochastic_layers import FullyFactorizedGaussian
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class VAEEncodeOutput(ModelOutput):
     """Output of VAE._encode / VAE.encode.
 
@@ -18,7 +18,7 @@ class VAEEncodeOutput(ModelOutput):
     mu: torch.Tensor
     log_var: torch.Tensor
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class VAEDecodeOutput(ModelOutput):
     """Output of VAE._decode / VAE.decode.
 
@@ -28,7 +28,7 @@ class VAEDecodeOutput(ModelOutput):
     x_hat: torch.Tensor
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class VAEOutput(ModelOutput):
     """Output of VAE.forward.
 
