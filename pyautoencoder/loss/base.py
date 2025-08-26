@@ -21,8 +21,8 @@ def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
     return _LOG2PI_CACHE[key]
 
 def log_likelihood(x: torch.Tensor, 
-                  x_hat: torch.Tensor, 
-                  likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> torch.Tensor:
+                   x_hat: torch.Tensor, 
+                   likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> torch.Tensor:
     """
     Computes elementwise log-likelihood log p(x|x_hat) under different likelihood assumptions.
     

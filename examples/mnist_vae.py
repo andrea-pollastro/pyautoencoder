@@ -1,9 +1,11 @@
 """Example of training a VAE on MNIST dataset."""
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from pyautoencoder import VAE, VAELoss
+import time
 
 # Load MNIST dataset
 transform = transforms.Compose([
@@ -11,7 +13,7 @@ transform = transforms.Compose([
 ])
 
 train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=512, shuffle=True)
 
 # Create VAE model and loss function
 latent_dim = 100
@@ -25,6 +27,7 @@ decoder = nn.Sequential(
     nn.Linear(latent_dim, 200),
     nn.ReLU(),
     nn.Linear(200, 784),
+    nn.Unflatten(-1, (1, 28, 28))
 )
 
 model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
@@ -34,8 +37,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 # Training loop with progress tracking
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
-
-for epoch in range(100):
+for epoch in range(1):
     model.train()
     total_loss = 0.0
     total_recon = 0.0
@@ -47,8 +49,7 @@ for epoch in range(100):
         
         # Forward pass
         output = model(x)
-        print(output)
-        loss_info = loss_fn(output, x)
+        loss_info = loss_fn(x, output)
         
         # Compute gradients and update parameters
         loss_info.total.backward()

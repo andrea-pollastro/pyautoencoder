@@ -129,6 +129,7 @@ class VAE(BaseAutoencoder):
             to evaluate log p(x | z_s) for each sample without copying x.
             For Bernoulli likelihoods, the decoder should output logits.
         """
+        
         enc = self._encode(x, S=S) # VAEEncodeOutput(z, mu, log_var)
         dec = self._decode(enc.z)  # VAEDecodeOutput(x_hat)
         return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)

@@ -3,8 +3,11 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Union
 import math
 import torch
+
 from .base import LikelihoodType, log_likelihood
 from .vae import compute_ELBO
+from ..models.autoencoder import AEOutput
+from ..models.variational.vae import VAEOutput
 
 LN2 = math.log(2.0)
 LOG_2PI = math.log(2.0 * math.pi)  # for Gaussian σ²=1 diagnostics
@@ -55,18 +58,18 @@ class VAELoss(BaseLoss):
         self.beta = beta
         self.likelihood = likelihood
 
-    def __call__(self, model_output: tuple, x: torch.Tensor) -> LossComponents:
+    def __call__(self, x: torch.Tensor, model_output: VAEOutput) -> LossComponents:
         """
         Computes VAE loss components and size-normalized diagnostics.
 
         Args:
-            model_output (tuple): (x_hat, z, mu, log_var) from the VAE forward pass.
-                - x_hat (torch.Tensor): Reconstructed samples, shape [B, ...] or [B, S, ...],
+            x (torch.Tensor): Ground truth inputs, shape [B, ...].
+            model_output (VAEOutput): from the VAE forward pass, dataclass with:
+                - x_hat (torch.Tensor): Reconstructed samples, shape [B, S, ...],
                                         where S is the number of Monte Carlo samples from q(z|x).
-                - z (torch.Tensor): Latent samples (unused here, kept for API symmetry).
+                - z (torch.Tensor): Latent samples (unused here).
                 - mu (torch.Tensor): Mean of q(z|x), shape [B, D_z].
                 - log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
-            x (torch.Tensor): Ground truth inputs, shape [B, ...].
 
         Returns:
             LossComponents: Named container with:
@@ -91,7 +94,9 @@ class VAELoss(BaseLoss):
             - For Gaussian (σ²=1), 'mse_per_dim' is computed via:
                 MSE_per_dim = 2·NLL_per_dim − log(2π), clamped to be ≥ 0.
         """
-        x_hat, _, mu, log_var = model_output  # z unused here
+        x_hat = model_output.x_hat
+        mu = model_output.mu
+        log_var = model_output.log_var
 
         elbo_components = compute_ELBO(
             x=x,
@@ -115,11 +120,11 @@ class VAELoss(BaseLoss):
 
         metrics: Dict[str, torch.Tensor] = {
             'elbo': elbo_components.elbo,
-            'log_likelihood_per_dim_nats': log_like_per_dim_nats,
-            'nll_per_dim_nats': nll_per_dim,
-            'bpd': bpd,
-            'kl_per_latent_dim_nats': kl_per_latent_dim_nats,
-            'kl_bits_per_latent_dim': kl_bits_per_latent_dim,
+            'log_likelihood_per_dim_nats': log_like_per_dim_nats.detach().cpu(),
+            'nll_per_dim_nats': nll_per_dim.detach().cpu(),
+            'bpd': bpd.detach().cpu(),
+            'kl_per_latent_dim_nats': kl_per_latent_dim_nats.detach().cpu(),
+            'kl_bits_per_latent_dim': kl_bits_per_latent_dim.detach().cpu(),
         }
 
         # Extra: derive MSE/dim for Gaussian(σ²=1)
@@ -152,14 +157,15 @@ class AELoss(BaseLoss):
         """
         self.likelihood = likelihood
 
-    def __call__(self, model_output: tuple, x: torch.Tensor) -> LossComponents:
+    def __call__(self, x: torch.Tensor, model_output: AEOutput) -> LossComponents:
         """
         Computes Autoencoder reconstruction loss and size-normalized diagnostics.
 
         Args:
-            model_output (tuple): (x_hat, z) from the AE forward pass. (z unused)
-                - x_hat (torch.Tensor): Reconstructions, shape [B, ...].
             x (torch.Tensor): Ground truth inputs, shape [B, ...].
+            model_output (AEOutput): from the AE forward pass, dataclass containing:
+                - x_hat (torch.Tensor): Reconstructions, shape [B, ...].
+                - z (torch.Tensor): Latent samples (unused here).
 
         Returns:
             LossComponents: Named container with:
@@ -180,7 +186,8 @@ class AELoss(BaseLoss):
                 * Gaussian: continuous data (typically standardized).
                 * Bernoulli: targets in [0, 1], predictions given as logits.
         """
-        x_hat, _ = model_output
+        x_hat = model_output.x_hat
+
         B = x.size(0)
         D_x = x[0].numel()
 
@@ -195,8 +202,8 @@ class AELoss(BaseLoss):
         bpd = nll_per_dim / LN2                                                # bits/dim
 
         metrics: Dict[str, torch.Tensor] = {
-            'reconstruction_per_dim_nats': nll_per_dim,
-            'bpd': bpd,
+            'reconstruction_per_dim_nats': nll_per_dim.detach().cpu(),
+            'bpd': bpd.detach().cpu(),
         }
 
         if self.likelihood == LikelihoodType.GAUSSIAN:
