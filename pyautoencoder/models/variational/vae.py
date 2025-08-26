@@ -5,14 +5,6 @@ from ..base import BaseVariationalAutoencoder
 from .stochastic_layers import FullyFactorizedGaussian
 
 class VAE(BaseVariationalAutoencoder):
-    """
-    Standard Variational Autoencoder (VAE) with a single latent layer.
-    Implementation of "Kingma, D. P., & Welling, M. (2013). Auto-encoding variational bayes."
-
-    Components:
-        - encoder: x → features f(x)  (shape [B, F])
-        - decoder: z → x_hat
-    """
     def __init__(
         self,
         encoder: nn.Module,
@@ -20,6 +12,13 @@ class VAE(BaseVariationalAutoencoder):
         latent_dim: int,
     ):
         """
+        Standard Variational Autoencoder (VAE) with a single latent layer.
+        Implementation following "Kingma, D. P., & Welling, M. (2013). Auto-encoding variational bayes."
+
+        Components:
+            - encoder: x → features f(x)  (shape [B, F])
+            - decoder: z → x_hat
+
         Args:
             encoder (nn.Module): Network mapping input x to feature vector f(x), shape [B, F].
             decoder (nn.Module): Network mapping latent z to reconstruction x_hat.

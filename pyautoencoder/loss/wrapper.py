@@ -35,17 +35,18 @@ class BaseLoss:
         raise NotImplementedError
 
 class VAELoss(BaseLoss):
-    """
-    Loss function for Variational Autoencoders (β-VAE style).
-
-    The optimized loss is the negative ELBO.
-    """
     def __init__(
         self,
         beta: float = 1.0,
         likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN,
     ):
         """
+        Loss function for Variational Autoencoders (β-VAE style).
+        The optimized loss is the negative ELBO. 
+        Uses negative log-likelihood (NLL) of reconstructions:
+        - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
+        - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
+
         Args:
             beta (float): Weighting factor for the KL term (β-VAE).
             likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
@@ -137,15 +138,14 @@ class VAELoss(BaseLoss):
         )
 
 class AELoss(BaseLoss):
-    """
-    Loss function for standard Autoencoders.
-
-    Uses negative log-likelihood (NLL) of reconstructions:
-        - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
-        - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
-    """
     def __init__(self, likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN):
         """
+        Loss function for standard Autoencoders.
+
+        Uses negative log-likelihood (NLL) of reconstructions:
+            - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
+            - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
+
         Args:
             likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
                 Supported: 'gaussian' (σ²=1) or 'bernoulli' (logits).

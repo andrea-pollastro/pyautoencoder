@@ -1,18 +1,9 @@
 """Example of training a VAE on MNIST dataset."""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from pyautoencoder import VAE, VAELoss
-
-# Hyperparameters
-latent_dim = 32
-hidden_dim = 512
-batch_size = 128
-learning_rate = 1e-3
-num_epochs = 50
-beta = 1.0  # for β-VAE, increase for stronger disentanglement
 
 # Load MNIST dataset
 transform = transforms.Compose([
@@ -20,49 +11,31 @@ transform = transforms.Compose([
 ])
 
 train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-# Define encoder and decoder networks
-class Encoder(nn.Module):
-    def __init__(self, input_dim=784, hidden_dim=512, output_dim=32):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
-        )
-    
-    def forward(self, x):
-        return self.net(x.view(x.size(0), -1))
-
-class Decoder(nn.Module):
-    def __init__(self, input_dim=32, hidden_dim=512, output_dim=784):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim),
-            nn.Sigmoid()  # For MNIST pixel values in [0,1]
-        )
-    
-    def forward(self, z):
-        return self.net(z).view(-1, 1, 28, 28)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
 # Create VAE model and loss function
-encoder = Encoder(input_dim=784, hidden_dim=hidden_dim, output_dim=latent_dim)
-decoder = Decoder(input_dim=latent_dim, hidden_dim=hidden_dim, output_dim=784)
+latent_dim = 100
+encoder = nn.Sequential(
+    nn.Flatten(),
+    nn.Linear(784, 200),
+    nn.ReLU(),
+)
+
+decoder = nn.Sequential(
+    nn.Linear(latent_dim, 200),
+    nn.ReLU(),
+    nn.Linear(200, 784),
+)
+
 model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
-loss_fn = VAELoss(beta=beta, likelihood='bernoulli')  # Binary images
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+loss_fn = VAELoss(likelihood='bernoulli')
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 # Training loop with progress tracking
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
 
-for epoch in range(num_epochs):
+for epoch in range(100):
     model.train()
     total_loss = 0.0
     total_recon = 0.0
