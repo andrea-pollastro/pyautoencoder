@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 class FullyFactorizedGaussian(nn.Module):
     """
@@ -20,10 +21,36 @@ class FullyFactorizedGaussian(nn.Module):
     """
     def __init__(self, latent_dim: int):
         super().__init__()
-        self.mu = nn.LazyLinear(latent_dim)
-        self.log_var = nn.LazyLinear(latent_dim)
+        self.latent_dim = latent_dim
+        self.mu: Optional[nn.Linear] = None
+        self.log_var: Optional[nn.Linear] = None
+        self._built = False
+
+    def build(self, input_sample: torch.Tensor) -> None:
+        """
+        Initialize layers using a sample input tensor `x` of shape [B, F].
+        Idempotent if called again with the same F.
+        """
+        if not isinstance(input_sample, torch.Tensor):
+            raise TypeError("build(x) expects a torch.Tensor.")
+        if input_sample.ndim != 2:
+            raise ValueError(f"build(x): expected shape [B, F], got {tuple(input_sample.shape)}. Flatten upstream.")
+        if input_sample.shape[1] <= 0:
+            raise ValueError("build(x): F (feature dimension) must be > 0.")
+        
+        in_features = int(input_sample.shape[1])
+
+        self.mu = nn.Linear(in_features, self.latent_dim)
+        self.log_var = nn.Linear(in_features, self.latent_dim)
+        self.to(device=input_sample.device, dtype=input_sample.dtype)
+
+        self.in_features = in_features
+        self._built = True
 
     def forward(self, x: torch.Tensor, S: int = 1):
+        if not self._built:
+            raise RuntimeError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
+
         mu = self.mu(x)            # [B, Dz]
         log_var = self.log_var(x)  # [B, Dz]
 
@@ -37,3 +64,7 @@ class FullyFactorizedGaussian(nn.Module):
             z = mu.unsqueeze(1).expand(-1, S, -1)       # [B, S, Dz]
 
         return z, mu, log_var
+    
+    @property
+    def built(self) -> bool:
+        return self._built

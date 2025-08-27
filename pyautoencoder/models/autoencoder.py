@@ -85,3 +85,6 @@ class AE(BaseAutoencoder):
         enc = self._encode(x)      # AEEncodeOutput(z)
         dec = self._decode(enc.z)  # AEDecodeOutput(x_hat)
         return AEOutput(x_hat=dec.x_hat, z=enc.z)
+    
+    def build(self, input_sample: torch.Tensor) -> None:
+        self._build = True
