@@ -99,8 +99,8 @@ def train_one_setting(latent_dim):
             model.train()
             opt.zero_grad()
             out = model(x, S=MC_SAMPLES)
-            info = loss_fn(x, out)
-            info.total.backward()
+            loss_info = loss_fn(x, out)
+            loss_info.total.backward()
             opt.step()
 
             samples_seen += x.size(0)
