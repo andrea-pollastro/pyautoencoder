@@ -59,7 +59,8 @@ pip install -e .
 ```python
 import torch
 import torch.nn as nn
-from pyautoencoder import VAE, VAELoss
+from pyautoencoder.variational import VAE
+from pyautoencoder.loss import VAELoss
 
 # Define encoder/decoder
 encoder = nn.Sequential(
@@ -96,14 +97,16 @@ for x in dataloader:
 
 - **`AE`** — standard Autoencoder
   ```python
-  from pyautoencoder import AE, AutoencoderLoss
+  from pyautoencoder.vanilla import AE
+  from pyautoencoder.loss import AELoss
   ae = AE(encoder=encoder, decoder=decoder)
-  criterion = AutoencoderLoss(likelihood="gaussian") # or bernoulli
+  criterion = AELoss(likelihood="gaussian") # or bernoulli
   ```
 
 - **`VAE`** — Variational Autoencoder
   ```python
-  from pyautoencoder import VAE, VAELoss
+  from pyautoencoder.variational import VAE, VAELoss
+  from pyautoencoder.loss import VAELoss
   vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
   criterion = VAELoss(beta=1.0, likelihood="gaussian") # or bernoulli
   ```
