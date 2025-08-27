@@ -7,8 +7,10 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from matplotlib.ticker import LogLocator, LogFormatterMathtext, NullFormatter
-from pyautoencoder import VAE, VAELoss 
 import matplotlib.pyplot as plt
+
+from pyautoencoder.variational import VAE
+from pyautoencoder.loss import VAELoss
 
 # ---- Repro configuration ----
 LATENTS = [3, 5, 10, 20, 200]   # Nz                                                     [paper]

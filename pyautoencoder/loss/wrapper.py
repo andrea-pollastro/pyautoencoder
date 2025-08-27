@@ -6,8 +6,8 @@ import torch
 
 from .base import LikelihoodType, log_likelihood
 from .vae import compute_ELBO
-from ..models.autoencoder import AEOutput
-from ..models.variational.vae import VAEOutput
+from ..vanilla.autoencoder import AEOutput
+from ..variational.vae import VAEOutput
 
 LN2 = math.log(2.0)
 LOG_2PI = math.log(2.0 * math.pi)  # for Gaussian σ²=1 diagnostics

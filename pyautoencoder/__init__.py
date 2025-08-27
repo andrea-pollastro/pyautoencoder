@@ -1,15 +1,5 @@
-"""PyAutoencoder: A clean, modular PyTorch library for autoencoder models."""
+from . import loss
+from . import vanilla
+from . import variational
 
-from .models.autoencoder import AE
-from .models.variational.vae import VAE
-from .loss.wrapper import AELoss, VAELoss, LossComponents
-
-__version__ = "0.1.0"
-
-__all__ = [
-    'AE',
-    'VAE',
-    'AELoss',
-    'VAELoss',
-    'LossComponents'
-]
+__all__ = ["loss", "vanilla", "variational"]
