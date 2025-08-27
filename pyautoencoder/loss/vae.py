@@ -8,7 +8,7 @@ class ELBOComponents(NamedTuple):
     """Components of the ELBO computation."""
     elbo: torch.Tensor                 # scalar: batch-mean ELBO (with grad)
     log_likelihood: torch.Tensor       # scalar: batch-mean E_q[log p(x|z)]
-    kl_divergence: torch.Tensor        # scalar: batch-mean KL(q||p)
+    beta_kl_divergence: torch.Tensor   # scalar: batch-mean β * KL(q||p)
 
 def kl_divergence_gaussian(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     """
@@ -52,7 +52,7 @@ def compute_ELBO(
             - elbo (torch.Tensor): Scalar, mean ELBO over the batch.
             - log_likelihood (torch.Tensor): Scalar, mean reconstruction term
               E_q[log p(x|z)] over the batch.
-            - kl_divergence (torch.Tensor): Scalar, mean KL divergence over the batch.
+            - beta_kl_divergence (torch.Tensor): Scalar, β * mean KL divergence over the batch.
 
     Notes:
         - If x_hat has no sample dimension, it is assumed to contain a single sample (S=1).
@@ -67,7 +67,7 @@ def compute_ELBO(
 
     # log p(x|z): elementwise -> sum over features => [B, S]
     log_px_z = log_likelihood(x.unsqueeze(1), x_hat, likelihood=likelihood)
-    log_px_z = log_px_z.view(B, S, -1).sum(-1)
+    log_px_z = log_px_z.reshape(B, S, -1).sum(-1)
 
     # E_q[log p(x|z)] via Monte Carlo average across S: [B]
     E_log_px_z = log_px_z.mean(dim=1)
@@ -79,10 +79,10 @@ def compute_ELBO(
     elbo_per_sample = E_log_px_z - beta * kl_q_p          # [B]
     elbo = elbo_per_sample.mean()                         # scalar
     E_log_px_z_mean = E_log_px_z.mean()                   # scalar
-    kl_q_p_mean = kl_q_p.mean()                           # scalar
+    beta_kl_q_p_mean = beta * kl_q_p.mean()               # scalar
 
     return ELBOComponents(
         elbo=elbo,
         log_likelihood=E_log_px_z_mean,
-        kl_divergence=kl_q_p_mean,
+        beta_kl_divergence=beta_kl_q_p_mean,
     )

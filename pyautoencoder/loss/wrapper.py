@@ -20,7 +20,7 @@ class LossComponents:
     Args:
         total (torch.Tensor): Scalar loss to optimize (already reduced over batch).
         components (Dict[str, torch.Tensor]): Named scalar terms that compose the loss
-            (e.g., 'log_likelihood', 'kl_divergence').
+            (e.g., 'negative_log_likelihood', 'beta_kl_divergence').
         metrics (Optional[Dict[str, torch.Tensor]]): Additional scalar diagnostics
             (e.g., per-dimension metrics in nats/bits, KL per latent dimension).
 
@@ -45,7 +45,7 @@ class VAELoss(BaseLoss):
     ):
         """
         Loss function for Variational Autoencoders (β-VAE style).
-        The optimized loss is the negative ELBO. 
+        The optimized loss is the *negative ELBO*. 
         Uses negative log-likelihood (NLL) of reconstructions:
         - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
         - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
@@ -75,15 +75,14 @@ class VAELoss(BaseLoss):
             LossComponents: Named container with:
                 - total (torch.Tensor): Scalar, negative ELBO (to minimize).
                 - components (Dict[str, torch.Tensor]):
-                    * 'log_likelihood': Scalar, batch-mean E_q[log p(x|z)] (nats).
-                    * 'kl_divergence': Scalar, batch-mean KL(q||p) (nats).
+                    * 'negative_log_likelihood': Scalar, batch-mean -E_q[log p(x|z)] (nats).
+                    * 'beta_kl_divergence': Scalar, batch-mean β * KL(q||p) (nats).
                 - metrics (Dict[str, torch.Tensor]):
                     * 'elbo': Scalar, batch-mean ELBO (nats).
-                    * 'log_likelihood_per_dim_nats': Scalar, E_q[log p(x|z)] / D_x (nats/dim, negative).
-                    * 'nll_per_dim_nats': Scalar, -E_q[log p(x|z)] / D_x (nats/dim, positive).
-                    * 'bpd': Scalar, bits per dimension = nll_per_dim_nats / ln(2) (bits/dim).
-                    * 'kl_per_latent_dim_nats': Scalar, KL / D_z (nats per latent dim).
-                    * 'kl_bits_per_latent_dim': Scalar, KL / (D_z * ln(2)) (bits per latent dim).
+                    * 'nll_per_dim_nats': Scalar, -E_q[log p(x|z)] / D_x (nats/dim).
+                    * 'nll_per_dim_bits': Scalar, bits per dimension = nll_per_dim_nats / ln(2) (bits/dim).
+                    * 'beta_kl_per_latent_dim_nats': Scalar, β * KL / D_z (nats per latent dim).
+                    * 'beta_kl_per_latent_dim_bits': Scalar, beta_kl_per_latent_dim_nats / ln(2) (bits per latent dim).
                     * 'mse_per_dim' (optional): Scalar, derived from Gaussian σ²=1 identity.
 
         Notes:
@@ -111,33 +110,31 @@ class VAELoss(BaseLoss):
         D_z = mu.size(-1)
 
         # Per-dimension / per-latent-dimension metrics
-        log_like_per_dim_nats = elbo_components.log_likelihood / D_x          # negative
-        nll_per_dim = -log_like_per_dim_nats                                  # nats/dim (positive)
-        bpd = nll_per_dim / LN2                                               # bits/dim
+        nll_per_dim_nats = -elbo_components.log_likelihood / D_x          # nats/dim
+        nll_per_dim_bits = nll_per_dim_nats / LN2                         # bits/dim
 
-        kl_per_latent_dim_nats = elbo_components.kl_divergence / D_z          # nats/latent-dim
-        kl_bits_per_latent_dim = kl_per_latent_dim_nats / LN2                 # bits/latent-dim
+        beta_kl_per_latent_dim_nats = elbo_components.beta_kl_divergence / D_z      # nats/latent-dim
+        beta_kl_per_latent_dim_bits = beta_kl_per_latent_dim_nats / LN2             # bits/latent-dim
 
         metrics: Dict[str, torch.Tensor] = {
-            'elbo': elbo_components.elbo,
-            'log_likelihood_per_dim_nats': log_like_per_dim_nats.detach().cpu(),
-            'nll_per_dim_nats': nll_per_dim.detach().cpu(),
-            'bpd': bpd.detach().cpu(),
-            'kl_per_latent_dim_nats': kl_per_latent_dim_nats.detach().cpu(),
-            'kl_bits_per_latent_dim': kl_bits_per_latent_dim.detach().cpu(),
+            'elbo': elbo_components.elbo.detach().cpu(),
+            'nll_per_dim_nats': nll_per_dim_nats.detach().cpu(),
+            'nll_per_dim_bits': nll_per_dim_bits.detach().cpu(),
+            'beta_kl_per_latent_dim_nats': beta_kl_per_latent_dim_nats.detach().cpu(),
+            'beta_kl_per_latent_dim_bits': beta_kl_per_latent_dim_bits.detach().cpu(),
         }
 
         # Extra: derive MSE/dim for Gaussian(σ²=1)
         if self.likelihood == LikelihoodType.GAUSSIAN:
             # NLL_per_dim = 0.5*MSE_per_dim + 0.5*log(2π) ⇒ MSE_per_dim = 2*NLL_per_dim − log(2π)
-            mse_per_dim = torch.clamp(2.0 * nll_per_dim - LOG_2PI, min=0.0)
-            metrics['mse_per_dim'] = mse_per_dim
+            mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
+            metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
 
         return LossComponents(
             total=-elbo_components.elbo,  # minimize negative ELBO
             components={
-                'log_likelihood': elbo_components.log_likelihood,
-                'kl_divergence': elbo_components.kl_divergence,
+                'negative_log_likelihood': -elbo_components.log_likelihood,
+                'beta_kl_divergence': elbo_components.beta_kl_divergence,
             },
             metrics=metrics,
         )
@@ -171,10 +168,10 @@ class AELoss(BaseLoss):
             LossComponents: Named container with:
                 - total (torch.Tensor): Scalar, batch-mean reconstruction loss (NLL in nats).
                 - components (Dict[str, torch.Tensor]):
-                    * 'reconstruction': Scalar, same as total.
+                    * 'negative_log_likelihood': Scalar, same as total.
                 - metrics (Dict[str, torch.Tensor]):
-                    * 'reconstruction_per_dim_nats': Scalar, NLL / D_x (nats/dim, positive).
-                    * 'bpd': Scalar, bits per dimension = (NLL / D_x) / ln(2) (bits/dim).
+                    * 'nll_per_dim_nats': Scalar, NLL / D_x (nats/dim).
+                    * 'nll_per_dim_bits': Scalar, bits per dimension = nll_per_dim_nats / ln(2) (bits/dim).
                     * 'mse_per_dim' (optional): Scalar, derived for Gaussian σ²=1.
 
         Notes:
@@ -193,25 +190,24 @@ class AELoss(BaseLoss):
 
         # Elementwise log-likelihood → per-sample sum → batch mean
         ll_elem = log_likelihood(x, x_hat, likelihood=self.likelihood)         # [B, ...]
-        ll_per_sample = ll_elem.view(B, -1).sum(-1)                            # [B]
-        recon_loss = (-ll_per_sample).mean()                                   # scalar NLL
+        ll_per_sample = ll_elem.reshape(B, -1).sum(-1)                         # [B]
+        nll = (-ll_per_sample).mean()                                          # scalar NLL
 
         # Per-dim diagnostics
-        log_like_per_dim_nats = ll_per_sample.mean() / D_x                     # negative
-        nll_per_dim = -log_like_per_dim_nats                                   # nats/dim
-        bpd = nll_per_dim / LN2                                                # bits/dim
+        nll_per_dim_nats = nll / D_x                                           # nats/dim
+        nll_per_dim_bits = nll_per_dim_nats / LN2                              # bits/dim
 
         metrics: Dict[str, torch.Tensor] = {
-            'reconstruction_per_dim_nats': nll_per_dim.detach().cpu(),
-            'bpd': bpd.detach().cpu(),
+            'nll_per_dim_nats': nll_per_dim_nats.detach().cpu(),
+            'nll_per_dim_bits': nll_per_dim_bits.detach().cpu(),
         }
 
         if self.likelihood == LikelihoodType.GAUSSIAN:
-            mse_per_dim = torch.clamp(2.0 * nll_per_dim - LOG_2PI, min=0.0)
-            metrics['mse_per_dim'] = mse_per_dim
+            mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
+            metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
 
         return LossComponents(
-            total=recon_loss,
-            components={'reconstruction': recon_loss},
+            total=nll,
+            components={'negative_log_likelihood': nll},
             metrics=metrics,
         )
