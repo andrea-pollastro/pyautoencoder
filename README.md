@@ -3,13 +3,12 @@
 A clean, modular PyTorch library for building and training autoencoders.
 
 <p align="center">
-  <img src="assets/logo.png" alt="pyautoencoder logo" width="220"/>
+  <img src="assets/logo_nobackground.png" alt="pyautoencoder logo" width="220"/>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/pyautoencoder/"><img alt="PyPI" src="https://img.shields.io/pypi/v/pyautoencoder.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
-  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions"><img alt="CI" src="https://img.shields.io/badge/CI-GitHub%20Actions-lightgrey"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social"></a>
 </p>
 
@@ -78,9 +77,7 @@ vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
 
 # Loss
 criterion = VAELoss(beta=1.0, likelihood="gaussian")
-
 optimizer = torch.optim.Adam(vae.parameters())
-
 for x in dataloader:
     optimizer.zero_grad()
     out = vae(x)
