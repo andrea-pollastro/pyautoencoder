@@ -2,9 +2,11 @@
 
 A clean, modular PyTorch library for building and training autoencoders.
 
-<p align="center">
+<!-- <p align="center">
   <img src="assets/logo_nobackground.png" alt="pyautoencoder logo" width="220"/>
-</p>
+</p> -->
+
+![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
 
 <p align="center">
   <a href="https://pypi.org/project/pyautoencoder/"><img alt="PyPI" src="https://img.shields.io/pypi/v/pyautoencoder.svg"></a>
