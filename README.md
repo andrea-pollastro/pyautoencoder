@@ -1,9 +1,43 @@
-![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
-[![PyPI version](https://img.shields.io/pypi/v/pyautoencoder.svg?color=orange&label=pypi)](https://pypi.org/project/pyautoencoder/)
-
 # PyAutoencoder
 
-A clean, modular PyTorch library for autoencoder models.
+A clean, modular PyTorch library for building and training autoencoders.
+
+<p align="center">
+  <img src="assets/logo.png" alt="pyautoencoder logo" width="220"/>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/pyautoencoder/"><img alt="PyPI" src="https://img.shields.io/pypi/v/pyautoencoder.svg"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions"><img alt="CI" src="https://img.shields.io/badge/CI-GitHub%20Actions-lightgrey"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social"></a>
+</p>
+
+---
+
+## Highlights
+
+PyAutoencoder is designed to offer **simple and easy access to autoencoder frameworks**. Here's what it offers:
+
+- **Minimal, composable API**  
+You don't have to inherit from complicated base classes or learn a new training loop. Simply provide your own PyTorch nn.Module encoder and decoder, and plug them into the ready‑to‑use autoencoder wrappers. This makes it easy to experiment with different architectures (e.g. MLPs, CNNs) while reusing the same training pipeline.
+
+- **Ready‑to‑use autoencoders**
+  The library ships with working implementations of autoencoders, each paired with their respective loss functions. You can start training in a few lines, without re‑implementing reconstruction likelihoods, KL divergence, or other boilerplate.
+
+- **PyTorch compatibility**  
+  The library is fully compatible with the PyTorch ecosystem, so models integrate naturally with modules, tensors, optimizers, and schedulers.
+
+- **Lightweight, research‑oriented**  
+  The library is intentionally minimal: no training loop frameworks, no heavy abstractions. This makes it well suited for research prototypes where you want control and transparency.
+
+> **Status**: The project is in an early but usable stage. Contributions, issues, and feedback are highly encouraged!
+
+**Currently implemented**:
+- Autoencoder (AE)
+- Variational Autoencoder (VAE)
+
+---
 
 ## Installation
 
@@ -11,145 +45,88 @@ A clean, modular PyTorch library for autoencoder models.
 pip install pyautoencoder
 ```
 
-## Quick Start
+Or install from source for development:
 
-```python
-import torch
-import torch.nn as nn
-from pyautoencoder import VAE, VAELoss
-
-# Define your encoder and decoder networks
-encoder = nn.Sequential(
-    nn.Linear(784, 512),
-    nn.ReLU(),
-    nn.Linear(512, 256)
-)
-
-decoder = nn.Sequential(
-    nn.Linear(256, 512),
-    nn.ReLU(),
-    nn.Linear(512, 784)
-)
-
-# Create VAE model
-vae = VAE(
-    encoder=encoder,
-    decoder=decoder,
-    latent_dim=32
-)
-
-# Create loss function
-vae_loss = VAELoss(beta=1.0)  # beta=1.0 for standard VAE
-
-# Define encoder and decoder networks
-encoder = nn.Sequential(
-    nn.Linear(784, 512),
-    nn.ReLU(),
-    nn.Linear(512, 256)
-)
-
-decoder = nn.Sequential(
-    nn.Linear(256, 512),
-    nn.ReLU(),
-    nn.Linear(512, 784)
-)
-
-# Create VAE
-vae = VAE(
-    encoder=encoder,
-    decoder=decoder,
-    latent_dim=32
-)
-
-# Create loss function
-vae_loss = VAELoss(beta=1.0, likelihood='gaussian')
-
-# Training loop example
-optimizer = torch.optim.Adam(vae.parameters())
-
-for batch in dataloader:
-    optimizer.zero_grad()
-    output = vae(batch)
-    loss_info = vae_loss(output, batch)
-    
-    # Access total loss and components
-    total_loss = loss_info.total
-    recon_loss = loss_info.components['reconstruction']
-    kl_loss = loss_info.components['kl_divergence']
-    
-    total_loss.backward()
-    optimizer.step()
-```
-
-## Available Models
-
-### Autoencoder (AE)
-```python
-from pyautoencoder import AE, AutoencoderLoss
-
-ae = AE(encoder=encoder, decoder=decoder)
-ae_loss = AutoencoderLoss(likelihood='gaussian')
-```
-
-### Variational Autoencoder (VAE)
-```python
-from pyautoencoder import VAE, VAELoss
-
-vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
-vae_loss = VAELoss(beta=1.0, likelihood='gaussian')
-```
-
-## Loss Components
-
-All losses return a `LossComponents` object containing:
-- `total`: The total loss to use for backpropagation
-- `components`: Dictionary of individual loss components for monitoring
-
-Example:
-```python
-loss_info = vae_loss(output, x)
-total_loss = loss_info.total
-recon_loss = loss_info.components['reconstruction']
-kl_loss = loss_info.components['kl_divergence']
-```
-
-## Contributing
-
-Contributions are welcome! Please check out our contribution guidelines.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-[![License](https://img.shields.io/github/license/andrea-pollastro/pyautoencoder.svg)](https://opensource.org/licenses/MIT)
-
-## 📦 Installation
-
-```bash
-pip install pyautoencoder
-```
-
-Or install from source:
 ```bash
 git clone https://github.com/andrea-pollastro/pyautoencoder.git
 cd pyautoencoder
 pip install -e .
 ```
 
-## 🤝 Contributing
-Contributions are welcome — especially new autoencoder variants, training examples, and documentation improvements.
-Please open an issue or pull request to discuss any changes.
+## Quick start
 
-## 📝 Citing
-```bibtex
-@misc{pollastro2025pyautoencoder,
-  Author = {Andrea Pollastro},
-  Title = {pyautoencoder},
-  Year = {2025},
-  Publisher = {GitHub},
-  Journal = {GitHub repository},
-  Howpublished = {\url{https://github.com/andrea-pollastro/pyautoencoder}}
-}
+```python
+import torch
+import torch.nn as nn
+from pyautoencoder import VAE, VAELoss
+
+# Define encoder/decoder
+encoder = nn.Sequential(
+    nn.Linear(784, 512), 
+    nn.ReLU(),
+    nn.Linear(512, 256)
+)
+
+decoder = nn.Sequential(
+    nn.Linear(256, 512), 
+    nn.ReLU(),
+    nn.Linear(512, 784)
+)
+
+# Model
+vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
+
+# Loss
+criterion = VAELoss(beta=1.0, likelihood="gaussian")
+
+optimizer = torch.optim.Adam(vae.parameters())
+
+for x in dataloader:
+    optimizer.zero_grad()
+    out = vae(x)
+    losses = criterion(out, x)
+    losses.total.backward() # negative ELBO
+    optimizer.step()
+
+    # optional: log components
+    log_likelihood = losses.components["log_likelihood"]
+    kl_divergence = losses.components["kl_divergence"]
 ```
 
-## 📄 License
-This project is licensed under the MIT License. See the LICENSE file for details.
+## Built‑in models
+
+- **`AE`** — standard Autoencoder
+  ```python
+  from pyautoencoder import AE, AutoencoderLoss
+  ae = AE(encoder=encoder, decoder=decoder)
+  criterion = AutoencoderLoss(likelihood="gaussian") # or bernoulli
+  ```
+
+- **`VAE`** — Variational Autoencoder
+  ```python
+  from pyautoencoder import VAE, VAELoss
+  vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
+  criterion = VAELoss(beta=1.0, likelihood="gaussian") # or bernoulli
+  ```
+
+## Examples
+
+See the [`examples/`](examples/) folder for runnable scripts showing example of usage.
+
+## License
+
+This project is released under the **MIT License**. See [LICENSE](LICENSE).
+
+## Citation
+
+If you use this package in academic work, please cite:
+
+```bibtex
+@misc{pollastro2025pyautoencoder,
+  author       = {Andrea Pollastro},
+  title        = {pyautoencoder},
+  year         = {2025},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/andrea-pollastro/pyautoencoder}
+}
+```
