@@ -1,9 +1,11 @@
-from typing import Any, Callable
+from typing import Any, Mapping
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from functools import wraps
+
+class NotBuiltError(RuntimeError): pass
 
 def _make_guard(name: str, orig):
     @wraps(orig)
@@ -139,4 +141,12 @@ class BaseAutoencoder(nn.Module, ABC):
     @property
     def built(self) -> bool:
         return self._built
+    
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False):
+        if not self._built:
+            raise NotBuiltError(
+                "load_state_dict called before build(). "
+                "Call model.build(example_x) so parameters exist, then load."
+            )
+        return super().load_state_dict(state_dict=state_dict, strict=strict, assign=assign)
         

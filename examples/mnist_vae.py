@@ -1,29 +1,29 @@
 # Reproduce Kingma & Welling (2013) Fig. 2 on MNIST with Nz = 3, 5, 10 (AEVB only)
 
-import math, time, random, os
+import time, random
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
+import numpy as np
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from matplotlib.ticker import LogLocator, LogFormatterMathtext, NullFormatter
+from pyautoencoder import VAE, VAELoss 
 import matplotlib.pyplot as plt
 
 # ---- Repro configuration ----
-LATENTS = [3, 5, 10]       # Nz
-HIDDEN = 500               # 1 hidden layer size in both encoder/decoder (MNIST)    [paper]
-BATCH_SIZE = 100           # M=100                                                  [paper]
-LR = 0.02                  # pick from {0.01, 0.02, 0.1}                            [paper]
-WEIGHT_DECAY = 1e-4        # small weight decay ~ N(0, I) prior                     [paper mentions small, value here is typical]
-MC_SAMPLES = 1             # L = 1                                                  [paper]
-TARGET_TRAIN_SAMPLES = 2_000_000    # stop when this many training samples have been seen
-EVAL_EVERY_SAMPLES = 50_000         # evaluate and log every this many samples
+LATENTS = [3, 5, 10, 20, 200]   # Nz                                                     [paper]
+HIDDEN = 500                    # 1 hidden layer size in both encoder/decoder (MNIST)    [paper]
+BATCH_SIZE = 100                # M = 100                                                [paper]
+LR = 0.02                       # pick from {0.01, 0.02, 0.1}                            [paper]
+WEIGHT_DECAY = 1e-4             # small weight decay ~ N(0, I) prior                     [paper mentions small, value here is typical]
+MC_SAMPLES = 1                  # L = 1                                                  [paper]
+TARGET_TRAIN_SAMPLES = 1e+7    # stop when this many training samples have been seen
+EVAL_EVERY_SAMPLES = 1e+5      # evaluate and log every this many samples
 USE_STOCHASTIC_BINARIZATION = False # set True to binarize x ~ Bernoulli(p=px)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 SEED = 1926
 torch.manual_seed(SEED); random.seed(SEED)
-
-# ---- Import your library exactly as in your snippet ----
-from pyautoencoder import VAE, VAELoss  # if your package is named differently, adjust here
 
 # ---- Data ----
 base_tfms = [transforms.ToTensor()]  # pixels in [0,1]
@@ -109,7 +109,7 @@ def train_one_setting(latent_dim):
                 tr_elbo = average_elbo(train_loader, model)  # full-train avg; for speed you may sub-sample
                 te_elbo = average_elbo(test_loader,  model)
                 logs.append({'samples': samples_seen, 'train_elbo': tr_elbo, 'test_elbo': te_elbo})
-                print(f"Nz={latent_dim:2d}  samples={samples_seen:>8d}  L_train={tr_elbo:.2f}  L_test={te_elbo:.2f}  (+{time.time()-t0:.1f}s)")
+                print(f"Nz={latent_dim:2d}  samples={samples_seen:>8d}  ELBO_train={tr_elbo:.2f}  ELBO_test={te_elbo:.2f}  (+{time.time()-t0:.1f}s)")
                 next_eval += EVAL_EVERY_SAMPLES
 
             if samples_seen >= TARGET_TRAIN_SAMPLES:
@@ -122,19 +122,29 @@ for nz in LATENTS:
     _, logs = train_one_setting(nz)
     all_logs[nz] = logs
 
-# ---- Plot (matches the style of Fig. 2) ----
-plt.figure(figsize=(8, 6))
-for nz in LATENTS:
-    xs = [d['samples'] / 1e6 for d in all_logs[nz]]  # in millions of samples
+# ---- Plot (follows the style of Fig. 2) ----
+fig, axs = plt.subplots(1, len(LATENTS), figsize=(3*len(LATENTS), 3))
+for i, nz in enumerate(LATENTS):
+    xs = [d['samples'] for d in all_logs[nz]]
     ys_tr = [d['train_elbo'] for d in all_logs[nz]]
     ys_te = [d['test_elbo']  for d in all_logs[nz]]
-    plt.plot(xs, ys_tr, label=f"AEVB (train), Nz={nz}")
-    plt.plot(xs, ys_te, linestyle='--', label=f"AEVB (test), Nz={nz}")
+    axs[i].plot(xs, ys_tr, label=f"AEVB (train)", color='r')
+    axs[i].plot(xs, ys_te, linestyle='--', label=f"AEVB (test)", color='r')
+    axs[i].set_ylim(-150, -95)
+    axs[i].set_xscale('log')
+    axs[i].set_title(f"MNIST, $N_z = {nz}$")
+    if i == 0:
+        axs[i].set_xlabel("# Training samples evaluated")
+        axs[i].set_ylabel(r"$L$")
 
-plt.xlabel("# Training samples evaluated (millions)")
-plt.ylabel("L (average variational lower bound per datapoint)")
-plt.title("MNIST VAE – AEVB only (reproduction of Fig. 2 for Nz=3,5,10)")
+for ax in (axs if isinstance(axs, (list, tuple, np.ndarray)) else [axs]):
+    ax.set_xscale('log')
+    ax.xaxis.set_major_locator(LogLocator(base=10))
+    ax.xaxis.set_major_formatter(LogFormatterMathtext(base=10))
+    ax.xaxis.set_minor_locator(LogLocator(base=10, subs=range(2, 10)))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+
 plt.legend()
 plt.tight_layout()
-plt.savefig("vae_mnist_fig2_repro_Nz_3_5_10.png", dpi=200)
-print("Saved figure -> vae_mnist_fig2_repro_Nz_3_5_10.png")
+plt.savefig("vae_mnist_fig2_repro.png", dpi=200)
+print("Saved figure -> vae_mnist_fig2_repro.png")
