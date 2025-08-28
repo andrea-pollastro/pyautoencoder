@@ -50,7 +50,7 @@ def init_weights_small_normal(m):
             nn.init.zeros_(m.bias)
 
 def make_vae(latent_dim, hidden=HIDDEN):
-    # Paper uses single hidden layer MLPs; Tanh was common in early VAEs.
+    # Paper uses single hidden layer MLPs with Tanh
     encoder = nn.Sequential(
         nn.Flatten(),
         nn.Linear(28*28, hidden),
@@ -60,15 +60,14 @@ def make_vae(latent_dim, hidden=HIDDEN):
         nn.Linear(latent_dim, hidden),
         nn.Tanh(),
         nn.Linear(hidden, 28*28),
-        nn.Unflatten(-1, (1, 28, 28))  # keep last layer linear; VAELoss(bernoulli) should handle logits
+        nn.Unflatten(-1, (1, 28, 28))  # keep last layer linear; VAELoss(bernoulli) handles logits
     )
     model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     model.build(input_sample=torch.randn(1, 1, 28, 28))
     model.apply(init_weights_small_normal)
     return model
 
-# Assumes VAELoss.total is a loss to MINIMIZE (negative ELBO on average per datapoint).
-# If your implementation differs, flip the sign in the two 'elbo_batch' lines below.
+# VAELoss.total is a loss to MINIMIZE (negative ELBO on average per datapoint).
 loss_fn = VAELoss(likelihood='bernoulli')
 
 @torch.no_grad()
@@ -78,9 +77,9 @@ def average_elbo(dataloader, model):
     n = 0
     for x, _ in dataloader:
         x = x.to(DEVICE)
-        out = model(x, S=MC_SAMPLES)  # if your API has a samples arg; else remove
-        info = loss_fn(x, out)
-        elbo_batch = -info.total.item()  # ELBO ≈ -loss
+        out = model(x, S=MC_SAMPLES)
+        loss_info = loss_fn(x, out)
+        elbo_batch = -loss_info.total.item()  # ELBO ≈ -loss
         bsz = x.size(0)
         total_elbo += elbo_batch * bsz
         n += bsz
@@ -108,7 +107,7 @@ def train_one_setting(latent_dim):
             samples_seen += x.size(0)
 
             if samples_seen >= next_eval:
-                tr_elbo = average_elbo(train_loader, model)  # full-train avg; for speed you may sub-sample
+                tr_elbo = average_elbo(train_loader, model)
                 te_elbo = average_elbo(test_loader,  model)
                 logs.append({'samples': samples_seen, 'train_elbo': tr_elbo, 'test_elbo': te_elbo})
                 print(f"Nz={latent_dim:2d}  samples={samples_seen:>8d}  ELBO_train={tr_elbo:.2f}  ELBO_test={te_elbo:.2f}  (+{time.time()-t0:.1f}s)")

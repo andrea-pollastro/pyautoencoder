@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from dataclasses import dataclass
 
-from ..base.base import BaseAutoencoder, ModelOutput
+from .._base.base import BaseAutoencoder, ModelOutput
 from .stochastic_layers import FullyFactorizedGaussian
 
 @dataclass(slots=True, repr=False)

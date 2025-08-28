@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from dataclasses import dataclass
 
-from ..base.base import BaseAutoencoder, ModelOutput
+from .._base.base import BaseAutoencoder, ModelOutput
 
 @dataclass(slots=True, repr=False)
 class AEEncodeOutput(ModelOutput):
@@ -87,4 +87,4 @@ class AE(BaseAutoencoder):
         return AEOutput(x_hat=dec.x_hat, z=enc.z)
     
     def build(self, input_sample: torch.Tensor) -> None:
-        self._build = True
+        self._built = True
