@@ -90,42 +90,42 @@ class BaseAutoencoder(nn.Module, ABC):
 
     # --- gradient-enabled training APIs (to be implemented by subclasses) ---
     @abstractmethod
-    def _encode(self, x: torch.Tensor, **kwargs: Any) -> ModelOutput:
+    def _encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Returns an encode-time ModelOutput (e.g., must include at least .z)."""
         pass
 
     @abstractmethod
-    def _decode(self, z: torch.Tensor, **kwargs: Any) -> ModelOutput:
+    def _decode(self, z: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Returns a decode-time ModelOutput (e.g., must include at least .x_hat)."""
         pass
 
     @abstractmethod
-    def forward(self, x: torch.Tensor, **kwargs: Any) -> ModelOutput:
+    def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Returns a forward-time ModelOutput (typically includes .x_hat and .z)."""
         pass
 
     # --- inference-only convenience wrappers (no grad; optional eval mode) ---
     @torch.inference_mode()
-    def encode(self, x: torch.Tensor, use_eval: bool = True, **kwargs: Any) -> ModelOutput:
+    def encode(self, x: torch.Tensor, use_eval: bool = True, *args: Any, **kwargs: Any) -> ModelOutput:
         """Returns an encode-time ModelOutput without gradient and eventually with use_eval."""
         if not use_eval:
-            return self._encode(x, **kwargs)
+            return self._encode(x, *args, **kwargs)
         prev = self.training
         try:
             self.eval()
-            return self._encode(x, **kwargs)
+            return self._encode(x, *args, **kwargs)
         finally:
             self.train(prev)
 
     @torch.inference_mode()
-    def decode(self, z: torch.Tensor, use_eval: bool = True, **kwargs: Any) -> ModelOutput:
+    def decode(self, z: torch.Tensor, use_eval: bool = True, *args: Any, **kwargs: Any) -> ModelOutput:
         """Returns an decode-time ModelOutput without gradient and eventually with use_eval."""
         if not use_eval:
-            return self._decode(z, **kwargs)
+            return self._decode(z, *args, **kwargs)
         prev = self.training
         try:
             self.eval()
-            return self._decode(z, **kwargs)
+            return self._decode(z, *args, **kwargs)
         finally:
             self.train(prev)
     
