@@ -51,7 +51,7 @@ class VAE(BaseAutoencoder):
         latent_dim: int,
     ):
         """
-        Standard Variational Autoencoder (VAE) with a single latent layer.
+        Standard Variational Autoencoder (VAE),
         Follows Kingma & Welling (2013), "Auto-Encoding Variational Bayes".
 
         Components:
