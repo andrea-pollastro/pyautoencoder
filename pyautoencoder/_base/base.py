@@ -1,4 +1,4 @@
-from typing import Any, Mapping
+from typing import Any, Mapping, Callable
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
@@ -7,7 +7,7 @@ from functools import wraps
 
 class NotBuiltError(RuntimeError): pass
 
-def _make_guard(name: str, orig):
+def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(orig)
     def guarded(self, *args, **kwargs):
         if not getattr(self, "_built", False):
@@ -56,7 +56,7 @@ class BaseAutoencoder(nn.Module, ABC):
         super().__init__()
         self._built: bool = False
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs) -> None:
         """Add guards and auto-warmup after build()."""
         super().__init_subclass__(**kwargs)
         
