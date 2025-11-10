@@ -8,12 +8,12 @@ class ELBOComponents(NamedTuple):
     """Components of the ELBO computation."""
     elbo: torch.Tensor                 # scalar: batch-mean ELBO (with grad)
     log_likelihood: torch.Tensor       # scalar: batch-mean E_q[log p(x|z)]
-    beta_kl_divergence: torch.Tensor   # scalar: batch-mean β * KL(q||p)
+    beta_kl_divergence: torch.Tensor   # scalar: batch-mean beta * KL(q||p)
 
 def kl_divergence_gaussian(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     """
     Computes the KL divergence KL(q(z|x) || p(z)) between the approximate
-    posterior q(z|x) = N(μ, σ²) and the standard normal prior p(z) = N(0, I).
+    posterior q(z|x) = N(mu, sigma^2) and the standard normal prior p(z) = N(0, I).
 
     Args:
         mu (torch.Tensor): Mean of q(z|x), shape [B, D_z].
@@ -36,7 +36,7 @@ def compute_ELBO(
 ) -> ELBOComponents:
     """
     Computes the Evidence Lower Bound (ELBO) for a Variational Autoencoder
-    using the β-VAE formulation.
+    using the beta-VAE formulation (beta=1 for standard VAE).
 
     Args:
         x (torch.Tensor): Ground truth inputs, shape [B, ...].
@@ -45,19 +45,19 @@ def compute_ELBO(
         mu (torch.Tensor): Mean of q(z|x), shape [B, D_z].
         log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
         likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
-        beta (float): Weighting factor for the KL term (β-VAE).
+        beta (float): Weighting factor for the KL term (beta-VAE).
 
     Returns:
         ELBOComponents: NamedTuple containing:
             - elbo (torch.Tensor): Scalar, mean ELBO over the batch.
             - log_likelihood (torch.Tensor): Scalar, mean reconstruction term
               E_q[log p(x|z)] over the batch.
-            - beta_kl_divergence (torch.Tensor): Scalar, β * mean KL divergence over the batch.
+            - beta_kl_divergence (torch.Tensor): Scalar, beta * mean KL divergence over the batch.
 
     Notes:
         - If x_hat has no sample dimension, it is assumed to contain a single sample (S=1).
         - log p(x|z) is computed using the `log_likelihood` function, which already
-          includes the Gaussian normalization constant for σ²=1 or the stable BCE for Bernoulli.
+          includes the Gaussian normalization constant for sigma^2=1 or the stable BCE for Bernoulli.
         - All outputs are averaged over the batch for reporting and optimization.
     """
     # Ensure a sample dimension S exists -> [B, S, ...]

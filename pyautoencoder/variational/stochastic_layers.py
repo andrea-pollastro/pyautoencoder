@@ -51,8 +51,8 @@ class FullyFactorizedGaussian(nn.Module):
         if not self._built:
             raise RuntimeError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
 
-        mu = self.mu(x)            # [B, Dz]
-        log_var = self.log_var(x)  # [B, Dz]
+        mu = self.mu(x)            # type: ignore       # [B, Dz]
+        log_var = self.log_var(x)  # type: ignore       # [B, Dz]
 
         if self.training:
             std = torch.exp(0.5 * log_var)              # [B, Dz]

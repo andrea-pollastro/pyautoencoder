@@ -10,7 +10,7 @@ from ..vanilla.autoencoder import AEOutput
 from ..variational.vae import VAEOutput
 
 LN2 = math.log(2.0)
-LOG_2PI = math.log(2.0 * math.pi)  # for Gaussian σ²=1 diagnostics
+LOG_2PI = math.log(2.0 * math.pi)  # for Gaussian sigma^2=1 diagnostics
 
 @dataclass
 class LossComponents:
@@ -44,16 +44,16 @@ class VAELoss(BaseLoss):
         likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN,
     ):
         """
-        Loss function for Variational Autoencoders (β-VAE style).
+        Loss function for Variational Autoencoders (beta-VAE style).
         The optimized loss is the *negative ELBO*. 
         Uses negative log-likelihood (NLL) of reconstructions:
-        - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
+        - Gaussian (sigma^2=1): per-dim NLL = 0.5*[(x - x_hat)^2 + log(2pi)].
         - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
 
         Args:
-            beta (float): Weighting factor for the KL term (β-VAE).
+            beta (float): Weighting factor for the KL term (beta-VAE).
             likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
-                Supported: 'gaussian' (σ²=1) or 'bernoulli' (logits).
+                Supported: 'gaussian' (sigma^2=1) or 'bernoulli' (logits).
         """
         self.beta = beta
         self.likelihood = likelihood
@@ -76,22 +76,22 @@ class VAELoss(BaseLoss):
                 - total (torch.Tensor): Scalar, negative ELBO (to minimize).
                 - components (Dict[str, torch.Tensor]):
                     * 'negative_log_likelihood': Scalar, batch-mean -E_q[log p(x|z)] (nats).
-                    * 'beta_kl_divergence': Scalar, batch-mean β * KL(q||p) (nats).
+                    * 'beta_kl_divergence': Scalar, batch-mean beta * KL(q||p) (nats).
                 - metrics (Dict[str, torch.Tensor]):
                     * 'elbo': Scalar, batch-mean ELBO (nats).
                     * 'nll_per_dim_nats': Scalar, -E_q[log p(x|z)] / D_x (nats/dim).
                     * 'nll_per_dim_bits': Scalar, bits per dimension = nll_per_dim_nats / ln(2) (bits/dim).
-                    * 'beta_kl_per_latent_dim_nats': Scalar, β * KL / D_z (nats per latent dim).
+                    * 'beta_kl_per_latent_dim_nats': Scalar, beta * KL / D_z (nats per latent dim).
                     * 'beta_kl_per_latent_dim_bits': Scalar, beta_kl_per_latent_dim_nats / ln(2) (bits per latent dim).
-                    * 'mse_per_dim' (optional): Scalar, derived from Gaussian σ²=1 identity.
+                    * 'mse_per_dim' (optional): Scalar, derived from Gaussian sigma^2=1 identity.
 
         Notes:
             - Reductions follow: sum over feature dimensions → mean over MC samples (if any) → mean over batch.
             - log p(x|z) is computed by `log_likelihood`:
-                * Gaussian (σ²=1): per-dim NLL = 0.5·MSE + 0.5·log(2π).
+                * Gaussian (sigma^2=1): per-dim NLL = 0.5*MSE + 0.5*log(2pi).
                 * Bernoulli (logits): per-dim NLL = BCEWithLogits.
-            - For Gaussian (σ²=1), 'mse_per_dim' is computed via:
-                MSE_per_dim = 2·NLL_per_dim − log(2π), clamped to be ≥ 0.
+            - For Gaussian (sigma^2=1), 'mse_per_dim' is computed via:
+                MSE_per_dim = 2*NLL_per_dim - log(2pi), clamped to be >= 0.
         """
         x_hat = model_output.x_hat
         mu = model_output.mu
@@ -124,9 +124,9 @@ class VAELoss(BaseLoss):
             'beta_kl_per_latent_dim_bits': beta_kl_per_latent_dim_bits.detach().cpu(),
         }
 
-        # Extra: derive MSE/dim for Gaussian(σ²=1)
+        # Extra: derive MSE/dim for Gaussian(sigma^2=1)
         if self.likelihood == LikelihoodType.GAUSSIAN:
-            # NLL_per_dim = 0.5*MSE_per_dim + 0.5*log(2π) ⇒ MSE_per_dim = 2*NLL_per_dim − log(2π)
+            # NLL_per_dim = 0.5*MSE_per_dim + 0.5*log(2pi) ⇒ MSE_per_dim = 2*NLL_per_dim - log(2pi)
             mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
             metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
 
@@ -145,12 +145,12 @@ class AELoss(BaseLoss):
         Loss function for standard Autoencoders.
 
         Uses negative log-likelihood (NLL) of reconstructions:
-            - Gaussian (σ²=1): per-dim NLL = 0.5·[(x − x_hat)² + log(2π)].
+            - Gaussian (sigma^2=1): per-dim NLL = 0.5*[(x - x_hat)^2 + log(2pi)].
             - Bernoulli (logits): per-dim NLL = BCEWithLogits(x_hat, x).
 
         Args:
             likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
-                Supported: 'gaussian' (σ²=1) or 'bernoulli' (logits).
+                Supported: 'gaussian' (sigma^2=1) or 'bernoulli' (logits).
         """
         self.likelihood = likelihood
 
@@ -172,13 +172,13 @@ class AELoss(BaseLoss):
                 - metrics (Dict[str, torch.Tensor]):
                     * 'nll_per_dim_nats': Scalar, NLL / D_x (nats/dim).
                     * 'nll_per_dim_bits': Scalar, bits per dimension = nll_per_dim_nats / ln(2) (bits/dim).
-                    * 'mse_per_dim' (optional): Scalar, derived for Gaussian σ²=1.
+                    * 'mse_per_dim' (optional): Scalar, derived for Gaussian sigma^2=1.
 
         Notes:
             - Reductions follow: elementwise log-likelihood → sum over feature dimensions
               → mean over batch.
-            - For Gaussian (σ²=1), 'mse_per_dim' is computed via:
-                MSE_per_dim = 2·(NLL_per_dim) − log(2π), clamped to be ≥ 0.
+            - For Gaussian (sigma^2=1), 'mse_per_dim' is computed via:
+                MSE_per_dim = 2*(NLL_per_dim) - log(2pi), clamped to be >= 0.
             - Ensure inputs match the likelihood’s expected scale:
                 * Gaussian: continuous data (typically standardized).
                 * Bernoulli: targets in [0, 1], predictions given as logits.

@@ -10,11 +10,11 @@ class LikelihoodType(Enum):
     GAUSSIAN = 'gaussian'
     BERNOULLI = 'bernoulli'
 
-# Cache for log(2π) constants per (device, dtype)
+# Cache for log(2pi) constants per (device, dtype)
 _LOG2PI_CACHE = {}
 
 def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
-    """Return log(2π) cached for the given device/dtype."""
+    """Return log(2pi) cached for the given device/dtype."""
     key = (x.device, x.dtype)
     if key not in _LOG2PI_CACHE:
         _LOG2PI_CACHE[key] = torch.tensor(2.0 * math.pi, device=x.device, dtype=x.dtype).log()
@@ -27,15 +27,15 @@ def log_likelihood(x: torch.Tensor,
     Computes elementwise log-likelihood log p(x|x_hat) under different likelihood assumptions.
     
     For continuous data:
-        Gaussian (σ² = 1):
-            log p(x|x_hat) = -0.5 * [ (x - x_hat)^2 + log(2π) ]
+        Gaussian (sigma^2 = 1):
+            log p(x|x_hat) = -0.5 * [ (x - x_hat)^2 + log(2pi) ]
         Each dimension contributes independently. To obtain per-sample log-likelihoods,
         sum over feature dimensions.
     
     For discrete data:
         Bernoulli:
-            log p(x|x_hat) = x * log σ(x_hat) + (1 - x) * log(1 - σ(x_hat)),
-        where σ is the sigmoid function and x_hat are logits.
+            log p(x|x_hat) = x * log sigma(x_hat) + (1 - x) * log(1 - sigma(x_hat)),
+        where sigma is the sigmoid function and x_hat are logits.
     
     Args:
         x (torch.Tensor): Ground truth tensor.
@@ -49,8 +49,8 @@ def log_likelihood(x: torch.Tensor,
     
     Notes:
         - Bernoulli case uses a numerically stable BCE implementation in log-space.
-        - Gaussian case assumes fixed unit variance (σ²=1) and includes the normalization constant.
-        - log(2π) is cached per (device, dtype) for efficiency.
+        - Gaussian case assumes fixed unit variance (sigma^2=1) and includes the normalization constant.
+        - log(2pi) is cached per (device, dtype) for efficiency.
     """
     if isinstance(likelihood, str):
         likelihood = LikelihoodType(likelihood.lower())

@@ -55,13 +55,13 @@ class VAE(BaseAutoencoder):
         Follows Kingma & Welling (2013), "Auto-Encoding Variational Bayes".
 
         Components:
-            - encoder: x → features extracted f(x) before sampling layer (shape [B, F])
-            - sampling_layer: (μ, log σ², S) → z                         (shape [B, S, D_z])
-            - decoder: z → x_hat
+            - encoder: x -> features extracted f(x) before sampling layer  (shape [B, F])
+            - sampling_layer: (mu, log sigma^2, S) -> z                    (shape [B, S, D_z])
+            - decoder: z -> x_hat
 
         Args:
             encoder (nn.Module): Maps input x to feature vector f(x), shape [B, F],
-                                 internally producing μ and log σ² for q(z|x).
+                                 internally producing mu and log sigma^2 for q(z|x).
             decoder (nn.Module): Maps latent z to reconstruction x_hat.
             latent_dim (int):    Dimensionality of the latent space (D_z).
         """
@@ -89,7 +89,7 @@ class VAE(BaseAutoencoder):
         Notes:
             The sampling layer typically follows module training mode:
               - train(): sample from q(z|x)
-              - eval():  tile μ (or use deterministic behavior)
+              - eval():  tile mu (or use deterministic behavior)
         """
         f = self.encoder(x)
         z, mu, log_var = self.sampling_layer(f, S=S)
@@ -111,7 +111,7 @@ class VAE(BaseAutoencoder):
         return VAEDecodeOutput(x_hat=x_hat)
 
     def forward(self, x: torch.Tensor, S: int = 1) -> VAEOutput:
-        """Full VAE pass: encode → sample S → decode.
+        """Full VAE pass: encode -> sample S -> decode.
 
         Args:
             x (torch.Tensor): Inputs, shape [B, ...].
