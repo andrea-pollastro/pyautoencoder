@@ -62,9 +62,9 @@ class DSprite(Dataset):
             
         if download and not self.filepath.exists():
             url = DSprite._NPZ_URL + DSprite._NPZ_FILENAME
-            print('Downloading dSprites from %s', url)
+            print(f'Downloading dSprites from {url}')
             wget.download(url, out=str(self.filepath))
-            print('Download completed')
+            print('\nDownload completed')
         
         data = np.load(self.filepath, allow_pickle=True)
         self.X = torch.as_tensor(data['imgs'], dtype=torch.int8)
