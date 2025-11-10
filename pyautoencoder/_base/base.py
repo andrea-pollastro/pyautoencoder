@@ -38,16 +38,16 @@ class ModelOutput(ABC):
 
 class BaseAutoencoder(nn.Module, ABC):
     """
-    Base class for Autoencoders (deterministic, variational, flow-based, etc.).
+    Base class for Autoencoders.
 
     Training (grad-enabled; subclasses decide the exact ModelOutput fields):
-      - _encode(x, **kwargs) -> ModelOutput
-      - _decode(z, **kwargs) -> ModelOutput
-      - forward(x, **kwargs) -> ModelOutput
+      - _encode(x, *args, **kwargs) -> ModelOutput
+      - _decode(z, *args, **kwargs) -> ModelOutput
+      - forward(x, *args, **kwargs) -> ModelOutput
 
     Inference (no grad; explicit decode(z) contract):
-      - encode(x, use_eval=True, **kwargs) -> ModelOutput
-      - decode(z, use_eval=True, **kwargs) -> ModelOutput
+      - encode(x, use_eval=True, *args, **kwargs) -> ModelOutput
+      - decode(z, use_eval=True, *args, **kwargs) -> ModelOutput
     """
 
     _GUARDED = {"forward", "_encode", "_decode"}
@@ -106,28 +106,14 @@ class BaseAutoencoder(nn.Module, ABC):
 
     # --- inference-only convenience wrappers (no grad; optional eval mode) ---
     @torch.inference_mode()
-    def encode(self, x: torch.Tensor, use_eval: bool = True, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns an encode-time ModelOutput without gradient and eventually with use_eval."""
-        if not use_eval:
-            return self._encode(x, *args, **kwargs)
-        prev = self.training
-        try:
-            self.eval()
-            return self._encode(x, *args, **kwargs)
-        finally:
-            self.train(prev)
+    def encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
+        """Returns an encode-time ModelOutput without gradient."""
+        return self._encode(x, *args, **kwargs)
 
     @torch.inference_mode()
-    def decode(self, z: torch.Tensor, use_eval: bool = True, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns an decode-time ModelOutput without gradient and eventually with use_eval."""
-        if not use_eval:
-            return self._decode(z, *args, **kwargs)
-        prev = self.training
-        try:
-            self.eval()
-            return self._decode(z, *args, **kwargs)
-        finally:
-            self.train(prev)
+    def decode(self, z: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
+        """Returns an decode-time ModelOutput without gradient."""
+        return self._decode(z, *args, **kwargs)
     
     # ----- required build step -----
     @abstractmethod
