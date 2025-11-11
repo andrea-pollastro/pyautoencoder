@@ -67,7 +67,7 @@ class DSprite(Dataset):
             print('\nDownload completed')
         
         data = np.load(self.filepath, allow_pickle=True)
-        self.X = torch.as_tensor(data['imgs'], dtype=torch.int8)
+        self.X = torch.as_tensor(data['imgs'], dtype=torch.int8).unsqueeze(1)
         self.latents_values = torch.as_tensor(data['latents_values'], dtype=torch.float64)
         self.latents_classes = torch.as_tensor(data['latents_classes'], dtype=torch.int64)
         self.transform = transform
