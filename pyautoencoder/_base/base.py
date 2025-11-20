@@ -91,7 +91,8 @@ class BuildGuardMixin(ABC):
 
                 # Try a cheap warm-up forward to drop the guards (and catch obvious wiring issues).
                 try:
-                    _ = self.forward(input_sample)  # first call will swap out guards on this instance
+                    with torch.no_grad():
+                        _ = self.forward(input_sample)  # first call will swap out guards on this instance
                 except TypeError:
                     # If forward requires extra non-default args, just skip the warm-up.
                     pass
