@@ -1,11 +1,12 @@
-from typing import Any, Mapping, Callable
+from typing import Any, Mapping, Callable, Iterable
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from functools import wraps
 
-class NotBuiltError(RuntimeError): pass
+class NotBuiltError(RuntimeError): 
+    pass
 
 def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(orig)
@@ -35,8 +36,69 @@ class ModelOutput(ABC):
                 s = repr(value)
                 parts.append(f"{name}={s}")
         return f"{self.__class__.__name__}({', '.join(parts)})"
+    
+class BuildGuardMixin(ABC):
+    """
+    Mixin that:
+      - requires subclasses to define a class attribute `_GUARDED`
+        (an iterable of method names)
+      - wraps those methods with a 'built' guard
+      - wraps build(x) to enforce self._built and run a warm-up forward
+    """
+    def __init__(self):
+        super().__init__()
+        self._built = False
 
-class BaseAutoencoder(nn.Module, ABC):
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+
+        # 0) Enforce that subclasses define `_GUARDED`
+        guarded = getattr(cls, "_GUARDED", None)
+        if guarded is None:
+            raise TypeError(
+                f"{cls.__name__} must define a class attribute `_GUARDED` "
+                "with the names of methods to guard."
+            )
+        if not isinstance(guarded, Iterable) or isinstance(guarded, (str, bytes)):
+            raise TypeError(
+                f"{cls.__name__}._GUARDED must be an iterable of method names, "
+                f"got {type(guarded).__name__}."
+            )
+
+        # Normalize to a set of strings
+        guarded = set(guarded)
+        setattr(cls, "_GUARDED", guarded)
+
+        # 1) Guard methods in _GUARDED until built; self-remove on first call
+        for name in guarded:
+            if name in cls.__dict__:
+                orig = cls.__dict__[name]
+                setattr(cls, name, _make_guard(name, orig))
+
+        # 2) Wrap subclass build(x) to enforce _built and run a tiny warm-up.
+        if "build" in cls.__dict__:
+            _orig_build = cls.__dict__["build"]
+
+            @wraps(_orig_build)
+            def _wrapped_build(self, input_sample: torch.Tensor) -> None:
+                # Ensure no grad & call user build
+                with torch.no_grad():
+                    _orig_build(self, input_sample)
+                if not getattr(self, "_built", False):
+                    raise RuntimeError(
+                        "Subclass build(x) must set `self._built = True` once building is done."
+                    )
+
+                # Try a cheap warm-up forward to drop the guards (and catch obvious wiring issues).
+                try:
+                    _ = self.forward(input_sample)  # first call will swap out guards on this instance
+                except TypeError:
+                    # If forward requires extra non-default args, just skip the warm-up.
+                    pass
+
+            setattr(cls, "build", _wrapped_build)
+
+class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
     """
     Base class for Autoencoders.
 
@@ -54,39 +116,6 @@ class BaseAutoencoder(nn.Module, ABC):
     
     def __init__(self) -> None:
         super().__init__()
-        self._built: bool = False
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        """Add guards and auto-warmup after build()."""
-        super().__init_subclass__(**kwargs)
-        
-        # 1) Guard forward/_encode/_decode until built; self-remove on first call after build.
-        for name in cls._GUARDED:
-            if name in cls.__dict__:
-                orig = cls.__dict__[name]
-                setattr(cls, name, _make_guard(name, orig))
-
-        # 2) Wrap subclass build(x) to enforce _built and run a tiny forward warm-up.
-        if "build" in cls.__dict__:
-            _orig_build = cls.__dict__["build"]
-
-            @wraps(_orig_build)
-            def _wrapped_build(self, input_sample: torch.Tensor) -> None:
-                # Ensure no grad & call user build
-                with torch.no_grad():
-                    _orig_build(self, input_sample)
-                if not getattr(self, "_built", False):
-                    raise RuntimeError("Subclass build(x) must set `self._built = True` once building is done.")
-
-                # Try a cheap warm-up forward to drop the guards (and catch obvious wiring issues).
-                # Use a 1-sample slice when possible.
-                try:
-                    _ = self.forward(input_sample)  # first call will swap out guards on this instance
-                except TypeError:
-                    # If forward requires extra non-default args, just skip the warm-up.
-                    pass
-
-            setattr(cls, "build", _wrapped_build)
 
     # --- gradient-enabled training APIs (to be implemented by subclasses) ---
     @abstractmethod
