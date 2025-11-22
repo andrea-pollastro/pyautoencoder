@@ -12,7 +12,7 @@ def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(orig)
     def guarded(self, *args, **kwargs):
         if not getattr(self, "_built", False):
-            raise RuntimeError("Model is not built. Call `build(x)` first.")
+            raise NotBuiltError("Model is not built. Call `build(x)` first.")
         # first post-build call: swap in the original method on THIS instance
         bound_orig = orig.__get__(self, self.__class__)
         setattr(self, name, bound_orig)
@@ -85,7 +85,7 @@ class BuildGuardMixin(ABC):
                 with torch.no_grad():
                     _orig_build(self, input_sample)
                 if not getattr(self, "_built", False):
-                    raise RuntimeError(
+                    raise NotBuiltError(
                         "Subclass build(x) must set `self._built = True` once building is done."
                     )
 
