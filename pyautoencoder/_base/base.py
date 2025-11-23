@@ -80,22 +80,15 @@ class BuildGuardMixin(ABC):
             _orig_build = cls.__dict__["build"]
 
             @wraps(_orig_build)
-            def _wrapped_build(self, input_sample: torch.Tensor) -> None:
+            def _wrapped_build(self, *args: Any, **kwargs: Any) -> None:
                 # Ensure no grad & call user build
                 with torch.no_grad():
-                    _orig_build(self, input_sample)
+                    _orig_build(self, *args, **kwargs)
+
                 if not getattr(self, "_built", False):
                     raise NotBuiltError(
                         "Subclass build(x) must set `self._built = True` once building is done."
                     )
-
-                # Try a cheap warm-up forward to drop the guards (and catch obvious wiring issues).
-                try:
-                    with torch.no_grad():
-                        _ = self.forward(input_sample)  # first call will swap out guards on this instance
-                except TypeError:
-                    # If forward requires extra non-default args, just skip the warm-up.
-                    pass
 
             setattr(cls, "build", _wrapped_build)
 
