@@ -9,40 +9,14 @@ A clean, modular PyTorch library for building and training autoencoders.
 ![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
 
 <p align="center">
-  <!-- PyPI Version -->
-  <a href="https://pypi.org/project/pyautoencoder/">
-    <img alt="PyPI Version" src="https://img.shields.io/pypi/v/pyautoencoder.svg">
-  </a>
-
-  <!-- Python Versions -->
+  <a href="https://pypi.org/project/pyautoencoder/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/pyautoencoder.svg"></a>
   <img alt="Python Versions" src="https://img.shields.io/pypi/pyversions/pyautoencoder.svg">
-
-  <!-- CI Status -->
-  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml/badge.svg">
-  </a>
-
-  <!-- Publish Status -->
-  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml">
-    <img alt="Publish to PyPI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml/badge.svg">
-  </a>
-
-  <!-- License -->
-  <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE">
-    <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg">
-  </a>
-
-  <!-- GitHub Stars -->
-  <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers">
-    <img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social">
-  </a>
-
-  <!-- Downloads (optional but nice) -->
-  <a href="https://pepy.tech/project/pyautoencoder">
-    <img alt="Downloads" src="https://pepy.tech/badge/pyautoencoder">
-  </a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml/badge.svg"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://pepy.tech/project/pyautoencoder"><img alt="Downloads" src="https://pepy.tech/badge/pyautoencoder"></a>
+  <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social"></a>
 </p>
-
 
 ---
 
