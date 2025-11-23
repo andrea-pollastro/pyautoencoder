@@ -179,3 +179,25 @@ def test_ffg_eval_forward_respects_default_S_equals_1():
     assert z.shape == (B, 1, Dz)
     expected_z = mu.unsqueeze(1)  # [B, 1, Dz]
     assert torch.allclose(z, expected_z)
+
+
+def test_ffg_rejects_invalid_S_values():
+    """Test that S parameter validation rejects 0 and negative values."""
+    B, F, Dz = 2, 4, 3
+    x = torch.randn(B, F)
+
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    head.build(x)
+    head.train()
+
+    # S = 0 should raise
+    with pytest.raises(ValueError, match="S must be >= 1"):
+        head(x, S=0)
+
+    # S < 0 should raise
+    with pytest.raises(ValueError, match="S must be >= 1"):
+        head(x, S=-1)
+
+    # S = -5 should raise
+    with pytest.raises(ValueError, match="S must be >= 1"):
+        head(x, S=-5)
