@@ -50,6 +50,8 @@ class FullyFactorizedGaussian(nn.Module):
     def forward(self, x: torch.Tensor, S: int = 1):
         if not self._built:
             raise RuntimeError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
+        if S < 1:
+            raise ValueError("S must be >= 1.")
 
         mu = self.mu(x)            # type: ignore       # [B, Dz]
         log_var = self.log_var(x)  # type: ignore       # [B, Dz]
