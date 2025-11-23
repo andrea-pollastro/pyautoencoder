@@ -11,7 +11,7 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=[
-        "torch>=2.0.0"
+        "torch>=2.1.0"
     ],
     keywords=[
         "autoencoder", "pytorch", "deep learning",
@@ -27,5 +27,5 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.10',
 )
