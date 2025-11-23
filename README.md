@@ -19,7 +19,7 @@ A clean, modular PyTorch library for building and training autoencoders.
 
   <!-- CI Status -->
   <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/CI.yml/badge.svg">
+    <img alt="CI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml/badge.svg">
   </a>
 
   <!-- Publish Status -->
