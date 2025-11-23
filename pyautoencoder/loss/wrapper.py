@@ -56,6 +56,8 @@ class VAELoss(BaseLoss):
                 Supported: 'gaussian' (sigma^2=1) or 'bernoulli' (logits).
         """
         self.beta = beta
+        if isinstance(likelihood, str):
+            likelihood = LikelihoodType(likelihood.lower())
         self.likelihood = likelihood
 
     def __call__(self, x: torch.Tensor, model_output: VAEOutput) -> LossComponents:
@@ -152,6 +154,8 @@ class AELoss(BaseLoss):
             likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
                 Supported: 'gaussian' (sigma^2=1) or 'bernoulli' (logits).
         """
+        if isinstance(likelihood, str):
+            likelihood = LikelihoodType(likelihood.lower())
         self.likelihood = likelihood
 
     def __call__(self, x: torch.Tensor, model_output: AEOutput) -> LossComponents:
