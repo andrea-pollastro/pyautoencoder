@@ -10,7 +10,8 @@ A clean, modular PyTorch library for building and training autoencoders.
 
 <p align="center">
   <a href="https://pypi.org/project/pyautoencoder/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/pyautoencoder.svg"></a>
-  <img alt="Python Versions" src="https://img.shields.io/pypi/pyversions/pyautoencoder.svg">
+  <!-- <img alt="Python Versions" src="https://img.shields.io/pypi/pyversions/pyautoencoder.svg"> -->
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-blue">
   <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml/badge.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
