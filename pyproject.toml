@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyautoencoder"
+description = "A Python package offering implementations of state-of-the-art autoencoder architectures in PyTorch."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Andrea Pollastro" },
+]
+
+keywords = [
+  "autoencoder",
+  "pytorch",
+  "deep learning",
+  "machine learning",
+  "representation learning",
+  "dimensionality reduction",
+  "generative models",
+]
+
+classifiers = [
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+  "torch>=2.1.0",
+]
+
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/andrea-pollastro/pyautoencoder"
+Repository = "https://github.com/andrea-pollastro/pyautoencoder"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyautoencoder*"]
+
+[tool.setuptools_scm]
+write_to = "pyautoencoder/_version.py"
