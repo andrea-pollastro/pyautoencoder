@@ -8,17 +8,6 @@ from functools import wraps
 class NotBuiltError(RuntimeError): 
     pass
 
-def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
-    @wraps(orig)
-    def guarded(self, *args, **kwargs):
-        if not getattr(self, "_built", False):
-            raise NotBuiltError("Model is not built. Call `build(x)` first.")
-        # first post-build call: swap in the original method on THIS instance
-        bound_orig = orig.__get__(self, self.__class__)
-        setattr(self, name, bound_orig)
-        return bound_orig(*args, **kwargs)
-    return guarded
-
 @dataclass(slots=True)
 class ModelOutput(ABC):
     """Marker base class for all model outputs with a smart repr."""
@@ -43,45 +32,58 @@ class BuildGuardMixin(ABC):
       - requires subclasses to define a class attribute `_GUARDED`
         (an iterable of method names)
       - wraps those methods with a 'built' guard
-      - wraps build(x) to enforce self._built and run a warm-up forward
+      - wraps build(x) to enforce self._built
     """
+
     def __init__(self):
         super().__init__()
         self._built = False
 
+    @staticmethod
+    def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(orig)
+        def guarded(self, *args, **kwargs):
+            if not getattr(self, "_built", False):
+                raise NotBuiltError("Model is not built. Call `build(x)` first.")
+            # first post-build call: swap in the original method on THIS instance
+            bound_orig = orig.__get__(self, self.__class__)
+            setattr(self, name, bound_orig)
+            return bound_orig(*args, **kwargs)
+        return guarded
+
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
 
-        # 0) Enforce that subclasses define `_GUARDED`
         guarded = getattr(cls, "_GUARDED", None)
         if guarded is None:
             raise TypeError(
                 f"{cls.__name__} must define a class attribute `_GUARDED` "
                 "with the names of methods to guard."
             )
+        
         if not isinstance(guarded, Iterable) or isinstance(guarded, (str, bytes)):
             raise TypeError(
                 f"{cls.__name__}._GUARDED must be an iterable of method names, "
                 f"got {type(guarded).__name__}."
             )
 
-        # Normalize to a set of strings
         guarded = set(guarded)
         setattr(cls, "_GUARDED", guarded)
 
-        # 1) Guard methods in _GUARDED until built; self-remove on first call
         for name in guarded:
             if name in cls.__dict__:
                 orig = cls.__dict__[name]
-                setattr(cls, name, _make_guard(name, orig))
+                setattr(cls, name, BuildGuardMixin._make_guard(name, orig))
 
-        # 2) Wrap subclass build(x) to enforce _built and run a tiny warm-up.
         if "build" in cls.__dict__:
             _orig_build = cls.__dict__["build"]
 
             @wraps(_orig_build)
             def _wrapped_build(self, *args: Any, **kwargs: Any) -> None:
-                # Ensure no grad & call user build
+
+                if getattr(self, "_built", True):
+                    return
+
                 with torch.no_grad():
                     _orig_build(self, *args, **kwargs)
 
