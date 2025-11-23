@@ -65,8 +65,14 @@ def compute_ELBO(
         x_hat = x_hat.unsqueeze(1)  # S = 1
     B, S = x_hat.size(0), x_hat.size(1)
 
+    # Broadcast x to match x_hat's [B, S, ...] shape
+    x_expanded = x.unsqueeze(1)  # [B, 1, ...]
+    if x_expanded.shape != x_hat.shape:
+        # expand_as is a view (no real data copy) when only singleton dims are expanded
+        x_expanded = x_expanded.expand_as(x_hat)
+
     # log p(x|z): elementwise -> sum over features => [B, S]
-    log_px_z = log_likelihood(x.unsqueeze(1), x_hat, likelihood=likelihood)
+    log_px_z = log_likelihood(x_expanded, x_hat, likelihood=likelihood)
     log_px_z = log_px_z.reshape(B, S, -1).sum(-1)
 
     # E_q[log p(x|z)] via Monte Carlo average across S: [B]
