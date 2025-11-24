@@ -40,6 +40,12 @@ html_theme_options = {
     "show_prev_next": False,
 }
 
+html_sidebars = {
+    "index": [],
+    "getting_started": [],
+    "architecture": [],
+}
+
 import os
 import sys
 

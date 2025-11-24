@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 from typing import Optional
+from .._base.base import NotBuiltError
 
 class FullyFactorizedGaussian(nn.Module):
-    """Gaussian posterior head producing a fully factorized :math:`q(z \mid x)`.
+    r"""Gaussian posterior head producing a fully factorized :math:`q(z \mid x)`.
 
     Given input features ``x`` of shape ``[B, F]``, this module produces the
     parameters of a diagonal Gaussian posterior,
@@ -74,7 +75,7 @@ class FullyFactorizedGaussian(nn.Module):
         self._built = True
 
     def forward(self, x: torch.Tensor, S: int = 1):
-        """Compute parameters and (optionally) samples from the Gaussian posterior.
+        r"""Compute parameters and (optionally) samples from the Gaussian posterior.
 
         During training, this method returns ``S`` Monte Carlo samples using the
         reparameterization trick:
@@ -101,19 +102,19 @@ class FullyFactorizedGaussian(nn.Module):
             ``(z, mu, log_var)``, where:
 
             * ``z`` – sampled or repeated latent codes, shape ``[B, S, latent_dim]``.
-            * ``mu`` – mean of ``q(z \mid x)``, shape ``[B, latent_dim]``.
-            * ``log_var`` – log-variance of ``q(z \mid x)``, shape ``[B, latent_dim]``.
+            * ``mu`` – mean of :math:`q(z \mid x)`, shape ``[B, latent_dim]``.
+            * ``log_var`` – log-variance of :math:`q(z \mid x)`, shape ``[B, latent_dim]``.
 
         Raises
         ------
-        RuntimeError
+        NotBuiltError
             If the module has not been built.
         ValueError
             If ``S < 1``.
         """
 
         if not self._built:
-            raise RuntimeError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
+            raise NotBuiltError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
         if S < 1:
             raise ValueError("S must be >= 1.")
 

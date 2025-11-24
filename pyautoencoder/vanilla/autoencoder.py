@@ -46,7 +46,7 @@ class AEOutput(ModelOutput):
     z: torch.Tensor
 
 class AE(BaseAutoencoder):
-    """Standard Autoencoder composed of a user-defined encoder and decoder.
+    """Vanilla Autoencoder composed of a user-defined encoder and decoder.
 
     The model follows the :class:`BaseAutoencoder` interface and implements:
 
@@ -129,7 +129,7 @@ class AE(BaseAutoencoder):
     def build(self, input_sample: torch.Tensor) -> None:
         """Build the Autoencoder using a representative input.
 
-        For standard Autoencoders with fixed-size encoder and decoder modules,
+        For vanilla Autoencoders with fixed-size encoder and decoder modules,
         no size-dependent initialization is required, so this method simply sets
         ``self._built = True``.
 

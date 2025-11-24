@@ -5,7 +5,7 @@ from typing import Union
 from enum import Enum
 
 class LikelihoodType(Enum):
-    """Enumeration of supported decoder likelihood models :math:`p(x \mid z)`.
+    r"""Enumeration of supported decoder likelihood models :math:`p(x \mid z)`.
 
     Values
     ------
@@ -23,7 +23,7 @@ class LikelihoodType(Enum):
 _LOG2PI_CACHE = {}
 
 def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
-    """Return a cached value of :math:`\log(2\pi)` for the given device and dtype.
+    r"""Return a cached value of :math:`\log(2\pi)` for the given device and dtype.
 
     This avoids repeatedly allocating the constant for different devices or
     precisions. A separate tensor is cached for each ``(device, dtype)`` pair.

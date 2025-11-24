@@ -71,11 +71,10 @@ class VAELoss(BaseLoss):
 
         \mathcal{L}(x; \beta)
             = -\mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]
-            + \beta \, \mathrm{KL}(q(z \mid x) \,\|\, p(z)),
+            + \beta \, \mathrm{KL}(q(z \mid x) \,\|\, p(z)).
 
-    implemented using :func:`vae.compute_ELBO`. The class also reports several
-    size-normalized diagnostics such as per-dimension NLL (in nats and bits)
-    and KL per latent dimension.
+    The class also reports several size-normalized diagnostics such as 
+    per-dimension NLL (in nats and bits) and KL per latent dimension.
     """
 
     def __init__(
@@ -89,22 +88,22 @@ class VAELoss(BaseLoss):
         term is based on the negative log-likelihood (NLL) of the reconstructions:
 
         - Gaussian (:math:`\sigma^2 = 1`):
-        per-dimension NLL is
+          per-dimension NLL is
 
         .. math::
 
             \tfrac{1}{2}\bigl( (x - x_{\hat{}})^2 + \log(2\pi) \bigr).
 
         - Bernoulli (logits):
-        per-dimension NLL is given by
-        :func:`torch.nn.functional.binary_cross_entropy_with_logits`.
+          per-dimension NLL is given by
+          :func:`torch.nn.functional.binary_cross_entropy_with_logits`.
 
         Parameters
         ----------
-        beta : float, optional
+        beta : float, optional 
             Weighting factor for the KL term (:math:`\beta`-VAE). ``beta = 1``
             corresponds to the standard VAE objective.
-        likelihood : Union[str, LikelihoodType], optional
+        likelihood : Union[str, LikelihoodType], optional 
             Likelihood model for :math:`p(x \mid z)`. Either a string
             (``"gaussian"``, ``"bernoulli"``) or a :class:`LikelihoodType` enum
             value. For the Gaussian case, unit variance :math:`\sigma^2 = 1` is
@@ -126,50 +125,50 @@ class VAELoss(BaseLoss):
 
         Parameters
         ----------
-        x : torch.Tensor
+        x : torch.Tensor 
             Ground-truth inputs of shape ``[B, ...]``.
         model_output : VAEOutput
             Output from the VAE forward pass. Expected fields include:
 
             - ``x_hat`` (torch.Tensor): Reconstructed samples of shape
-            ``[B, S, ...]``, where ``S`` is the number of Monte Carlo samples
-            from :math:`q(z \mid x)`.
+              ``[B, S, ...]``, where ``S`` is the number of Monte Carlo samples
+              from :math:`q(z \mid x)`.
             - ``z`` (torch.Tensor): Latent samples (unused by this method).
             - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape
-            ``[B, D_z]``.
+              ``[B, D_z]``.
             - ``log_var`` (torch.Tensor): Log-variance of :math:`q(z \mid x)`,
-            shape ``[B, D_z]``.
+              shape ``[B, D_z]``.
 
         Returns
         -------
         LossComponents
-            Container with:
+            ``LossComponents`` container with:
 
             * **total** – Scalar negative ELBO (to minimize).
             * **components** – Dictionary with:
 
-            - ``"negative_log_likelihood"``:
-                batch-mean :math:`-\mathbb{E}_{q}[\log p(x \mid z)]` in nats.
-            - ``"beta_kl_divergence"``:
-                batch-mean :math:`\beta\,\mathrm{KL}(q \,\|\, p)` in nats.
+              - ``"negative_log_likelihood"``:
+                  batch-mean :math:`-\mathbb{E}_{q}[\log p(x \mid z)]` in nats.
+              - ``"beta_kl_divergence"``:
+                  batch-mean :math:`\beta\,\mathrm{KL}(q \,\|\, p)` in nats.
 
             * **metrics** – Dictionary with additional diagnostics:
 
-            - ``"elbo"``: batch-mean ELBO in nats.
-            - ``"nll_per_dim_nats"``:
-                :math:`-\mathbb{E}_{q}[\log p(x \mid z)] / D_x`
-                (nats per input dimension).
-            - ``"nll_per_dim_bits"``:
-                bits per dimension
-                (``nll_per_dim_nats / ln(2)``).
-            - ``"beta_kl_per_latent_dim_nats"``:
-                :math:`\beta\,\mathrm{KL}(q \,\|\, p) / D_z`
-                (nats per latent dimension).
-            - ``"beta_kl_per_latent_dim_bits"``:
-                bits per latent dimension
-                (``beta_kl_per_latent_dim_nats / ln(2)``).
-            - ``"mse_per_dim"`` (Gaussian only):
-                per-dimension MSE derived from the Gaussian identity.
+              - ``"elbo"``: batch-mean ELBO in nats.
+              - ``"nll_per_dim_nats"``:
+                  :math:`-\mathbb{E}_{q}[\log p(x \mid z)] / D_x`
+                  (nats per input dimension).
+              - ``"nll_per_dim_bits"``:
+                  bits per dimension
+                  (``nll_per_dim_nats / ln(2)``).
+              - ``"beta_kl_per_latent_dim_nats"``:
+                  :math:`\beta\,\mathrm{KL}(q \,\|\, p) / D_z`
+                  (nats per latent dimension).
+              - ``"beta_kl_per_latent_dim_bits"``:
+                  bits per latent dimension
+                  (``beta_kl_per_latent_dim_nats / ln(2)``).
+              - ``"mse_per_dim"`` (Gaussian only):
+                  per-dimension MSE derived from the Gaussian identity.
 
         Notes
         -----
@@ -180,22 +179,14 @@ class VAELoss(BaseLoss):
         3. Average over the batch.
 
         For the Gaussian (:math:`\sigma^2=1`) case, the per-dimension MSE is
-        computed from the relation
-
-        .. math::
-
-            \text{NLL}_{\text{per dim}}
-                = \tfrac{1}{2}\,\text{MSE}_{\text{per dim}}
-                + \tfrac{1}{2}\log(2\pi),
-
-        giving
+        computed as
 
         .. math::
 
             \text{MSE}_{\text{per dim}}
                 = 2\,\text{NLL}_{\text{per dim}} - \log(2\pi),
 
-        clamped to be non-negative.
+        and clamped to be non-negative.
         """
 
         x_hat = model_output.x_hat
@@ -261,19 +252,19 @@ class AELoss(BaseLoss):
         of the reconstructions:
 
         - Gaussian (:math:`\sigma^2 = 1`):
-        per-dimension NLL is
+          per-dimension NLL is
 
         .. math::
 
             \tfrac{1}{2}\bigl( (x - x_{\hat{}})^2 + \log(2\pi) \bigr).
 
         - Bernoulli (logits):
-        per-dimension NLL is given by
-        :func:`torch.nn.functional.binary_cross_entropy_with_logits`.
+          per-dimension NLL is given by
+          :func:`torch.nn.functional.binary_cross_entropy_with_logits`.
 
         Parameters
         ----------
-        likelihood : Union[str, LikelihoodType], optional
+        likelihood : Union[str, LikelihoodType], optional 
             Likelihood model for :math:`p(x \mid z)`. Either a string
             (``"gaussian"``, ``"bernoulli"``) or a :class:`LikelihoodType` enum
             value. For the Gaussian case, unit variance :math:`\sigma^2 = 1` is
@@ -303,27 +294,30 @@ class AELoss(BaseLoss):
         Returns
         -------
         LossComponents
-            Container with:
+            ``LossComponents`` with:
 
             * **total** – Scalar batch-mean reconstruction loss (NLL in nats).
             * **components** – Dictionary with:
 
-            - ``"negative_log_likelihood"``:
-                same scalar as ``total``.
+              - ``"negative_log_likelihood"``:
+                  same scalar as ``total``.
 
             * **metrics** – Dictionary with diagnostics:
 
-            - ``"nll_per_dim_nats"``:
-                :math:`\text{NLL} / D_x` (nats per input dimension).
-            - ``"nll_per_dim_bits"``:
-                bits per dimension (``nll_per_dim_nats / ln(2)``).
-            - ``"mse_per_dim"`` (Gaussian only):
-                per-dimension MSE derived from the Gaussian identity.
+              - ``"nll_per_dim_nats"``:
+                  :math:`\text{NLL} / D_x` (nats per input dimension).
+              - ``"nll_per_dim_bits"``:
+                  bits per dimension (``nll_per_dim_nats / ln(2)``).
+              - ``"mse_per_dim"`` (Gaussian only):
+                  per-dimension MSE derived from the Gaussian identity.
 
         Notes
         -----
-        Reductions follow: elementwise log-likelihood :math:`\rightarrow` sum
-        over feature dimensions :math:`\rightarrow` mean over the batch.
+        Reductions follow: 
+        
+        1. Elementwise log-likelihood 
+        2. Sum over feature dimensions
+        3. Mean over the batch.
 
         For the Gaussian (:math:`\sigma^2=1`) case, the per-dimension MSE is
         computed as

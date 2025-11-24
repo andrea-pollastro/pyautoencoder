@@ -8,7 +8,7 @@ from functools import wraps
 class NotBuiltError(RuntimeError): 
     """Exception raised when a guarded method is called on a model that has not been built.
 
-    This error is typically raised by :class:`BuildGuardMixin` when a method
+    This error is raised by :class:`BuildGuardMixin` when a method
     listed in ``_GUARDED`` is invoked before :meth:`build` has successfully
     completed and set ``self._built = True``.
     """
@@ -57,9 +57,7 @@ class BuildGuardMixin(ABC):
     wrapped at class creation time so that they:
 
     * Raise :class:`NotBuiltError` when called while ``self._built`` is ``False``.
-    * On the first successful call after the model is built, replace the
-    guarded wrapper on that instance with the original method for zero
-    overhead in subsequent calls.
+    * On the first successful call after the model is built, replace the guarded wrapper on that instance with the original method for zero overhead in subsequent calls.
 
     If the subclass defines a :meth:`build` method, it is also wrapped so that
     it is executed under ``torch.no_grad()`` and is required to set
