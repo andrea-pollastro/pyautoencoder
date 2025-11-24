@@ -1,29 +1,66 @@
-"""Loss functions for variational autoencoders with rigorous mathematical implementations."""
 import torch
 from typing import Union, NamedTuple
 
 from .base import log_likelihood, LikelihoodType
 
 class ELBOComponents(NamedTuple):
-    """Components of the ELBO computation."""
+    """Named tuple containing the main components of the ELBO.
+
+    Attributes
+    ----------
+    elbo : torch.Tensor
+        Scalar tensor containing the mean ELBO over the batch (with gradients).
+    log_likelihood : torch.Tensor
+        Scalar tensor containing the mean reconstruction term
+        :math:`\mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]`.
+    beta_kl_divergence : torch.Tensor
+        Scalar tensor containing :math:`\beta` times the mean KL divergence
+        :math:`\mathrm{KL}(q(z \mid x) \| p(z))` over the batch.
+    """
+
     elbo: torch.Tensor                 # scalar: batch-mean ELBO (with grad)
     log_likelihood: torch.Tensor       # scalar: batch-mean E_q[log p(x|z)]
     beta_kl_divergence: torch.Tensor   # scalar: batch-mean beta * KL(q||p)
 
 def kl_divergence_gaussian(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
-    """
-    Computes the KL divergence KL(q(z|x) || p(z)) between the approximate
-    posterior q(z|x) = N(mu, sigma^2) and the standard normal prior p(z) = N(0, I).
+    r"""Compute the KL divergence :math:`\mathrm{KL}(q(z \mid x) \,\|\, p(z))`
+    for diagonal Gaussian posteriors.
 
-    Args:
-        mu (torch.Tensor): Mean of q(z|x), shape [B, D_z].
-        log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
+    The approximate posterior is assumed to be
 
-    Returns:
-        torch.Tensor: KL divergence per sample, shape [B].
-                      Reduction over latent dimensions is performed inside,
-                      but not over the batch.
+    .. math::
+
+        q(z \mid x) = \mathcal{N}(\mu, \operatorname{diag}(\sigma^2)), \qquad
+        \sigma^2 = \exp(\log \sigma^2),
+
+    and the prior is the standard normal
+
+    .. math::
+
+        p(z) = \mathcal{N}(0, I).
+
+    The closed-form KL divergence for each sample is
+
+    .. math::
+
+        \mathrm{KL}(q \,\|\, p) =
+            -\tfrac{1}{2} \sum_{d}
+            \bigl(1 + \log \sigma_d^2 - \mu_d^2 - \sigma_d^2 \bigr).
+
+    Parameters
+    ----------
+    mu : torch.Tensor
+        Mean tensor of shape ``[B, D_z]``.
+    log_var : torch.Tensor
+        Log-variance tensor of shape ``[B, D_z]``.
+
+    Returns
+    -------
+    torch.Tensor
+        Per-sample KL divergences of shape ``[B]``. Reduction is performed
+        over latent dimensions but **not** over the batch.
     """
+
     return -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=-1)
 
 def compute_ELBO(
@@ -34,32 +71,73 @@ def compute_ELBO(
     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN,
     beta: float = 1.0,
 ) -> ELBOComponents:
+    r"""Compute the Evidence Lower Bound (ELBO) for a (beta-)Variational Autoencoder.
+
+    This function implements the beta-VAE objective:
+
+    .. math::
+
+        \mathcal{L}(x; \beta)
+            = \mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]
+            \;-\;
+            \beta \, \mathrm{KL}(q(z \mid x) \,\|\, p(z)).
+
+    The reconstruction term :math:`\log p(x \mid z)` is computed using
+    :func:`vae.base.log_likelihood`, which supports both Gaussian and
+    Bernoulli likelihoods.
+
+    Monte Carlo estimation
+    ----------------------
+    If ``x_hat`` contains ``S`` Monte Carlo samples, the expectation
+    \ :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
+
+    .. math::
+
+        \mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]
+            \approx \frac{1}{S} \sum_{s=1}^{S}
+            \log p(x \mid z^{(s)}).
+
+    Inputs and broadcasting
+    -----------------------
+    - If ``x_hat`` has shape ``[B, ...]``, it is interpreted as a single
+    sample and is expanded to ``[B, 1, ...]``.
+    - ``x`` is broadcast to match the sample dimension.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Ground-truth inputs, shape ``[B, ...]``.
+    x_hat : torch.Tensor
+        Reconstructed samples. Either of shape ``[B, ...]`` (single sample)
+        or ``[B, S, ...]`` where ``S`` is the number of samples.
+    mu : torch.Tensor
+        Mean of the approximate posterior ``q(z \mid x)``, shape ``[B, D_z]``.
+    log_var : torch.Tensor
+        Log-variance of ``q(z \mid x)``, shape ``[B, D_z]``.
+    likelihood : Union[str, LikelihoodType], optional
+        Likelihood model for the reconstruction term. Defaults to Gaussian.
+    beta : float, optional
+        Weight for the KL term (beta-VAE). ``beta = 1`` yields the standard VAE.
+
+    Returns
+    -------
+    ELBOComponents
+        Named tuple containing:
+        
+        * **elbo** – Mean ELBO over the batch.
+        * **log_likelihood** – Mean reconstruction term
+        :math:`\mathbb{E}_{q}[\log p(x \mid z)]`.
+        * **beta_kl_divergence** – Mean :math:`\beta \, \mathrm{KL}(q \,\|\, p)`
+        over the batch.
+
+    Notes
+    -----
+    - The log-likelihood term includes the Gaussian normalization constant
+    or numerically stable Bernoulli log-probabilities.
+    - All returned values are **batch means** and maintain gradients.
+    - ``x_hat`` is never detached; gradients flow through the decoder.
     """
-    Computes the Evidence Lower Bound (ELBO) for a Variational Autoencoder
-    using the beta-VAE formulation (beta=1 for standard VAE).
 
-    Args:
-        x (torch.Tensor): Ground truth inputs, shape [B, ...].
-        x_hat (torch.Tensor): Reconstructed samples, shape [B, ...] or [B, S, ...],
-                              where S is the number of Monte Carlo samples from q(z|x).
-        mu (torch.Tensor): Mean of q(z|x), shape [B, D_z].
-        log_var (torch.Tensor): Log-variance of q(z|x), shape [B, D_z].
-        likelihood (Union[str, LikelihoodType]): Likelihood model for p(x|z).
-        beta (float): Weighting factor for the KL term (beta-VAE).
-
-    Returns:
-        ELBOComponents: NamedTuple containing:
-            - elbo (torch.Tensor): Scalar, mean ELBO over the batch.
-            - log_likelihood (torch.Tensor): Scalar, mean reconstruction term
-              E_q[log p(x|z)] over the batch.
-            - beta_kl_divergence (torch.Tensor): Scalar, beta * mean KL divergence over the batch.
-
-    Notes:
-        - If x_hat has no sample dimension, it is assumed to contain a single sample (S=1).
-        - log p(x|z) is computed using the `log_likelihood` function, which already
-          includes the Gaussian normalization constant for sigma^2=1 or the stable BCE for Bernoulli.
-        - All outputs are averaged over the batch for reporting and optimization.
-    """
     # Ensure a sample dimension S exists -> [B, S, ...]
     if x_hat.dim() == x.dim():
         x_hat = x_hat.unsqueeze(1)  # S = 1

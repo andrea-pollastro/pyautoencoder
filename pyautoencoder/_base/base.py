@@ -6,11 +6,33 @@ from dataclasses import dataclass, fields
 from functools import wraps
 
 class NotBuiltError(RuntimeError): 
+    """Exception raised when a guarded method is called on a model that has not been built.
+
+    This error is typically raised by :class:`BuildGuardMixin` when a method
+    listed in ``_GUARDED`` is invoked before :meth:`build` has successfully
+    completed and set ``self._built = True``.
+    """
+
     pass
 
 @dataclass(slots=True)
 class ModelOutput(ABC):
-    """Marker base class for all model outputs with a smart repr."""
+    """Base class for autoencoder outputs with a concise, tensor-aware ``repr``.
+
+    Subclasses are dataclasses that group together tensors and auxiliary values
+    produced by a model (for example latent codes, reconstructions, losses, etc.).
+    The custom :meth:`__repr__` implementation prints tensor fields using only
+    their shape and dtype instead of full values, which keeps logs readable even
+    for large tensors.
+
+    Notes
+    -----
+    Any field whose value is a :class:`torch.Tensor` is rendered as::
+
+        Tensor(shape=(...), dtype=...)
+
+    All other fields are rendered using :func:`repr`.
+    """
 
     def __repr__(self) -> str:
         parts = []
@@ -27,12 +49,29 @@ class ModelOutput(ABC):
         return f"{self.__class__.__name__}({', '.join(parts)})"
     
 class BuildGuardMixin(ABC):
-    """
-    Mixin that:
-      - requires subclasses to define a class attribute `_GUARDED`
-        (an iterable of method names)
-      - wraps those methods with a 'built' guard
-      - wraps build(x) to enforce self._built
+    """Mixin that guards selected methods until the module has been built.
+
+    Classes that inherit from this mixin must define a class attribute
+    ``_GUARDED`` containing the **names** of methods that should not be
+    callable until :meth:`build` has been run successfully. These methods are
+    wrapped at class creation time so that they:
+
+    * Raise :class:`NotBuiltError` when called while ``self._built`` is ``False``.
+    * On the first successful call after the model is built, replace the
+    guarded wrapper on that instance with the original method for zero
+    overhead in subsequent calls.
+
+    If the subclass defines a :meth:`build` method, it is also wrapped so that
+    it is executed under ``torch.no_grad()`` and is required to set
+    ``self._built = True`` when the module is ready.
+
+    Attributes
+    ----------
+    _built : bool
+        Flag indicating whether :meth:`build` has completed successfully.
+    _GUARDED : set[str]
+        Names of methods that are wrapped with the build guard. Must be defined
+        by subclasses as an iterable of method names.
     """
 
     def __init__(self):
@@ -41,6 +80,27 @@ class BuildGuardMixin(ABC):
 
     @staticmethod
     def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
+        """Create a guarded wrapper around a method that enforces the build contract.
+
+        The returned wrapper checks ``self._built`` before delegating to the original
+        method. If the model is not built, :class:`NotBuiltError` is raised. On the
+        first successful call after the model is built, the wrapper replaces itself
+        on that instance with the original bound method so that further calls incur
+        no additional overhead.
+
+        Parameters
+        ----------
+        name : str
+            Name of the method being guarded.
+        orig : Callable
+            Original unbound method object.
+
+        Returns
+        -------
+        Callable
+            A wrapper that enforces the build guard on the given method.
+        """
+
         @wraps(orig)
         def guarded(self, *args, **kwargs):
             if not getattr(self, "_built", False):
@@ -52,6 +112,21 @@ class BuildGuardMixin(ABC):
         return guarded
 
     def __init_subclass__(cls, **kwargs) -> None:
+        """Hook that installs build guards on subclass methods.
+
+        At subclass creation time this hook:
+
+        1. Validates the presence and type of ``cls._GUARDED``.
+        2. Converts ``cls._GUARDED`` to a :class:`set` of method names.
+        3. Wraps each method listed in ``_GUARDED`` (if defined on the subclass)
+        with a guard produced by :meth:`_make_guard`.
+        4. If the subclass defines :meth:`build`, wraps it so that:
+
+        * It is executed under ``torch.no_grad()``.
+        * It is required to set ``self._built = True`` once building is done.
+        * A :class:`NotBuiltError` is raised otherwise.
+        """
+
         super().__init_subclass__(**kwargs)
 
         guarded = getattr(cls, "_GUARDED", None)
@@ -95,18 +170,55 @@ class BuildGuardMixin(ABC):
             setattr(cls, "build", _wrapped_build)
 
 class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
-    """
-    Base class for Autoencoders.
+    """Base class for autoencoders with an explicit build step.
 
-    Training (grad-enabled; subclasses decide the exact ModelOutput fields):
-      - _encode(x, *args, **kwargs) -> ModelOutput
-      - _decode(z, *args, **kwargs) -> ModelOutput
-      - forward(x, *args, **kwargs) -> ModelOutput
+    This class defines a common interface for autoencoders that split their
+    logic into *encoding*, *decoding* and *forward* passes, and enforces a
+    build step via :class:`BuildGuardMixin`.
 
-    Inference (no grad; explicit decode(z) contract):
-      - encode(x, use_eval=True, *args, **kwargs) -> ModelOutput
-      - decode(z, use_eval=True, *args, **kwargs) -> ModelOutput
+    Training API (gradients enabled)
+    --------------------------------
+    Subclasses must implement the following abstract methods:
+
+    * ``_encode(x, *args, **kwargs) -> ModelOutput``  
+    Low-level encoder that typically returns a :class:`ModelOutput` with at
+    least a latent code attribute (for example ``z``).
+
+    * ``_decode(z, *args, **kwargs) -> ModelOutput``  
+    Low-level decoder that typically returns a :class:`ModelOutput` with at
+    least a reconstruction attribute (for example ``x_hat``).
+
+    * ``forward(x, *args, **kwargs) -> ModelOutput``  
+    Full forward pass used during training. This usually combines encoding
+    and decoding and returns a :class:`ModelOutput` that may contain both
+    ``z`` and ``x_hat``, plus any other quantities needed for loss
+    computation.
+
+    Inference API (no gradients)
+    ----------------------------
+    For convenience, the class also exposes high-level inference helpers that
+    are executed under :func:`torch.inference_mode`:
+
+    * :meth:`encode` – calls :meth:`_encode` without tracking gradients.
+    * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
+
+    Build Contract
+    --------------
+    Before training or inference, subclasses must implement and call
+    :meth:`build` with a representative input tensor. The build method is
+    responsible for creating any size-dependent layers or buffers and must set
+    ``self._built = True`` when the module is ready. Methods listed in
+    ``_GUARDED`` (by default ``{"forward", "_encode", "_decode"}``) are
+    protected and will raise :class:`NotBuiltError` if called before the build
+    step has completed.
+
+    Attributes
+    ----------
+    _GUARDED : set[str]
+        Names of methods guarded by :class:`BuildGuardMixin`. By default
+        ``{"forward", "_encode", "_decode"}``.
     """
+
 
     _GUARDED = {"forward", "_encode", "_decode"}
     
@@ -116,44 +228,192 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
     # --- gradient-enabled training APIs (to be implemented by subclasses) ---
     @abstractmethod
     def _encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns an encode-time ModelOutput (e.g., must include at least .z)."""
+        """Encode a batch of inputs into a latent representation.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input batch to encode.
+        *args
+            Additional positional arguments passed to the encoder.
+        **kwargs
+            Additional keyword arguments passed to the encoder.
+
+        Returns
+        -------
+        ModelOutput
+            A model output object that must contain at least a latent code
+            (for example an attribute named ``z``).
+        """
+
         pass
 
     @abstractmethod
     def _decode(self, z: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns a decode-time ModelOutput (e.g., must include at least .x_hat)."""
+        """Decode a batch of latent codes into reconstructed inputs.
+
+        Parameters
+        ----------
+        z : torch.Tensor
+            Latent representation batch to decode.
+        *args
+            Additional positional arguments passed to the decoder.
+        **kwargs
+            Additional keyword arguments passed to the decoder.
+
+        Returns
+        -------
+        ModelOutput
+            A model output object that must contain at least a reconstruction
+            (for example an attribute named ``x_hat``).
+        """
+
         pass
 
     @abstractmethod
     def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns a forward-time ModelOutput (typically includes .x_hat and .z)."""
+        """Full training forward pass of the autoencoder.
+
+        This method is responsible for connecting the encoder and decoder and
+        producing all outputs needed for training (for example latents,
+        reconstructions and any auxiliary losses).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input batch to encode and decode.
+        *args
+            Additional positional arguments used by the subclass implementation.
+        **kwargs
+            Additional keyword arguments used by the subclass implementation.
+
+        Returns
+        -------
+        ModelOutput
+            A model output object that typically includes both the latent code
+            (for example ``z``) and the reconstruction (for example ``x_hat``),
+            plus any other training-specific quantities.
+        """
+
         pass
 
     # --- inference-only convenience wrappers (no grad; optional eval mode) ---
     @torch.inference_mode()
     def encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns an encode-time ModelOutput without gradient."""
+        """Encode inputs without tracking gradients.
+
+        This is a thin wrapper around :meth:`_encode` executed under
+        :func:`torch.inference_mode`, making it suitable for evaluation-time
+        encoding.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input batch to encode.
+        *args
+            Additional positional arguments passed to :meth:`_encode`.
+        **kwargs
+            Additional keyword arguments passed to :meth:`_encode`.
+
+        Returns
+        -------
+        ModelOutput
+            The encoder :class:`ModelOutput`, typically containing at least a
+            latent code (for example ``z``).
+        """
+
         return self._encode(x, *args, **kwargs)
 
     @torch.inference_mode()
     def decode(self, z: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
-        """Returns an decode-time ModelOutput without gradient."""
+        """Decode latent codes without tracking gradients.
+
+        This is a thin wrapper around :meth:`_decode` executed under
+        :func:`torch.inference_mode`, making it suitable for evaluation-time
+        decoding.
+
+        Parameters
+        ----------
+        z : torch.Tensor
+            Latent representation batch to decode.
+        *args
+            Additional positional arguments passed to :meth:`_decode`.
+        **kwargs
+            Additional keyword arguments passed to :meth:`_decode`.
+
+        Returns
+        -------
+        ModelOutput
+            The decoder :class:`ModelOutput`, typically containing at least a
+            reconstruction (for example ``x_hat``).
+        """
+
         return self._decode(z, *args, **kwargs)
     
     # ----- required build step -----
     @abstractmethod
     def build(self, input_sample: torch.Tensor) -> None:
+        """Build the module given a representative input sample.
+
+        Subclasses must implement this method to create any size-dependent layers,
+        parameters or buffers (for example layers whose dimensions depend on
+        ``input_sample.shape``). The implementation **must** set
+        ``self._built = True`` once the module is fully initialized, otherwise
+        :class:`NotBuiltError` will be raised by the build guard.
+
+        This method is executed under ``torch.no_grad()`` by
+        :class:`BuildGuardMixin`.
+
+        Parameters
+        ----------
+        input_sample : torch.Tensor
+            A representative input tensor used to infer sizes and initialize
+            internal components.
         """
-        Prepare the module (e.g., create size-dependent layers, buffers, dtype/device align).
-        Must set `self._built = True` when ready.
-        """
+
         pass
 
     @property
     def built(self) -> bool:
+        """Whether the autoencoder has been successfully built.
+
+        Returns
+        -------
+        bool
+            ``True`` if :meth:`build` has completed and set ``self._built = True``,
+            ``False`` otherwise.
+        """
+
         return self._built
     
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False):
+        """Load a state dictionary into a built autoencoder.
+
+        This override enforces that :meth:`build` has been called before loading
+        weights, so that all parameters and buffers already exist with the correct
+        shapes. If the model is not built yet, :class:`NotBuiltError` is raised
+        with a hint to call :meth:`build` using a representative input.
+
+        Parameters
+        ----------
+        state_dict : Mapping[str, Any]
+            A state dictionary as produced by :meth:`state_dict`.
+        strict : bool, optional
+            If ``True`` (default), the keys in ``state_dict`` must exactly match
+            the keys returned by :meth:`state_dict`. If ``False``, missing keys
+            and unexpected keys are ignored.
+        assign : bool, optional
+            If ``True``, the incoming tensors in ``state_dict`` are directly
+            assigned to the module's parameters and buffers, instead of copying
+            data into existing tensors.
+
+        Returns
+        -------
+        Any
+            The same value returned by :meth:`torch.nn.Module.load_state_dict`,
+            typically a :class:`torch.nn.modules.module._IncompatibleKeys` object.
+        """
+
         if not self._built:
             raise NotBuiltError(
                 "load_state_dict called before build(). "

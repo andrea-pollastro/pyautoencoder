@@ -1,4 +1,3 @@
-"""Base loss functions for autoencoders."""
 import math
 import torch
 import torch.nn.functional as F
@@ -6,7 +5,17 @@ from typing import Union
 from enum import Enum
 
 class LikelihoodType(Enum):
-    """Supported likelihood types for the decoder distribution p(x|z)."""
+    """Enumeration of supported decoder likelihood models :math:`p(x \mid z)`.
+
+    Values
+    ------
+    GAUSSIAN : str
+        Gaussian likelihood with fixed unit variance :math:`\sigma^2 = 1`.
+    BERNOULLI : str
+        Bernoulli likelihood for discrete data, with ``x_hat`` interpreted
+        as logits.
+    """
+
     GAUSSIAN = 'gaussian'
     BERNOULLI = 'bernoulli'
 
@@ -14,7 +23,24 @@ class LikelihoodType(Enum):
 _LOG2PI_CACHE = {}
 
 def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
-    """Return log(2pi) cached for the given device/dtype."""
+    """Return a cached value of :math:`\log(2\pi)` for the given device and dtype.
+
+    This avoids repeatedly allocating the constant for different devices or
+    precisions. A separate tensor is cached for each ``(device, dtype)`` pair.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        A tensor whose ``device`` and ``dtype`` determine which cached value is
+        returned or created.
+
+    Returns
+    -------
+    torch.Tensor
+        A scalar tensor equal to :math:`\log(2\pi)` with the same device and
+        dtype as ``x``.
+    """
+
     key = (x.device, x.dtype)
     if key not in _LOG2PI_CACHE:
         _LOG2PI_CACHE[key] = torch.tensor(2.0 * math.pi, device=x.device, dtype=x.dtype).log()
@@ -23,35 +49,60 @@ def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
 def log_likelihood(x: torch.Tensor, 
                    x_hat: torch.Tensor, 
                    likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> torch.Tensor:
+    r"""Compute the elementwise log-likelihood :math:`\log p(x \mid \hat{x})`.
+
+    Two likelihood models are supported.
+
+    - Gaussian (continuous data)
+      Assuming fixed unit variance :math:`\sigma^2 = 1`, each element follows:
+
+      .. math::
+
+          \log p(x \mid \hat{x}) =
+              -\tfrac{1}{2} \left[ (x - \hat{x})^2 + \log(2\pi) \right].
+
+      The output has the same shape as ``x``. Summing over feature dimensions
+      gives per-sample log-likelihoods.
+
+    - Bernoulli (discrete data)
+      Here ``x_hat`` is interpreted as logits. Each element follows:
+
+      .. math::
+
+          \log p(x \mid \hat{x}) =
+              x \log \sigma(\hat{x})
+              + (1 - x) \log\!\left( 1 - \sigma(\hat{x}) \right),
+
+      where :math:`\sigma` is the sigmoid. A numerically stable implementation
+      using :func:`torch.nn.functional.binary_cross_entropy_with_logits`
+      is applied.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Ground-truth tensor.
+    x_hat : torch.Tensor
+        Reconstructed tensor. For the Bernoulli case, values are logits.
+    likelihood : Union[str, LikelihoodType], optional
+        Likelihood model to use. May be a string (``"gaussian"``,
+        ``"bernoulli"``) or a :class:`LikelihoodType` enum value.
+        Defaults to Gaussian.
+
+    Returns
+    -------
+    torch.Tensor
+        Elementwise log-likelihood with the same shape as ``x``.
+
+    Notes
+    -----
+    - The Gaussian case includes the normalization constant
+      :math:`\log(2\pi)`, cached per ``(device, dtype)`` with
+      :func:`_get_log2pi`.
+    - The Bernoulli case is fully numerically stable because it operates
+      directly in log-space.
     """
-    Computes elementwise log-likelihood log p(x|x_hat) under different likelihood assumptions.
-    
-    For continuous data:
-        Gaussian (sigma^2 = 1):
-            log p(x|x_hat) = -0.5 * [ (x - x_hat)^2 + log(2pi) ]
-        Each dimension contributes independently. To obtain per-sample log-likelihoods,
-        sum over feature dimensions.
-    
-    For discrete data:
-        Bernoulli:
-            log p(x|x_hat) = x * log sigma(x_hat) + (1 - x) * log(1 - sigma(x_hat)),
-        where sigma is the sigmoid function and x_hat are logits.
-    
-    Args:
-        x (torch.Tensor): Ground truth tensor.
-        x_hat (torch.Tensor): Reconstructed tensor. For Bernoulli, values are logits.
-        likelihood (Union[str, LikelihoodType]): Choice of likelihood model. Defaults to Gaussian.
-    
-    Returns:
-        torch.Tensor: Elementwise log-likelihood with the same shape as `x`.
-                      For multi-dimensional inputs, reduce across feature dimensions
-                      to obtain per-sample log-likelihoods.
-    
-    Notes:
-        - Bernoulli case uses a numerically stable BCE implementation in log-space.
-        - Gaussian case assumes fixed unit variance (sigma^2=1) and includes the normalization constant.
-        - log(2pi) is cached per (device, dtype) for efficiency.
-    """
+
+
     if isinstance(likelihood, str):
         likelihood = LikelihoodType(likelihood.lower())
     
