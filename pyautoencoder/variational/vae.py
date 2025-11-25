@@ -78,6 +78,18 @@ class VAE(BaseAutoencoder):
     ):
         """Construct a Variational Autoencoder from an encoder, decoder, and latent size.
 
+        Notes
+        -----
+        A sampling layer is internally created using a fully factorized Gaussian
+        (`FullyFactorizedGaussian`). At the moment this sampling layer is not
+        configurable from the outside: it is fixed and not exposed as an argument
+        to the constructor.
+
+        In a future revision, the sampling layer will become a user-selectable
+        component, allowing different reparameterization modules to be passed in.
+        The VAE will then choose the appropriate sampling strategy based on a
+        constructor parameter.
+
         Parameters
         ----------
         encoder : nn.Module

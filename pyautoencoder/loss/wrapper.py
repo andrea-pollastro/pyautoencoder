@@ -169,6 +169,8 @@ class VAELoss(BaseLoss):
                   (``beta_kl_per_latent_dim_nats / ln(2)``).
               - ``"mse_per_dim"`` (Gaussian only):
                   per-dimension MSE derived from the Gaussian identity.
+              - ``"mse"`` (Gaussian only):
+                  MSE derived from the Gaussian identity.
 
         Notes
         -----
@@ -225,6 +227,8 @@ class VAELoss(BaseLoss):
             # NLL_per_dim = 0.5*MSE_per_dim + 0.5*log(2pi) ⇒ MSE_per_dim = 2*NLL_per_dim - log(2pi)
             mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
             metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
+            mse = mse_per_dim * D_x
+            metrics['mse'] = mse.detach().cpu()
 
         return LossComponents(
             total=-elbo_components.elbo,  # minimize negative ELBO
@@ -310,6 +314,8 @@ class AELoss(BaseLoss):
                   bits per dimension (``nll_per_dim_nats / ln(2)``).
               - ``"mse_per_dim"`` (Gaussian only):
                   per-dimension MSE derived from the Gaussian identity.
+              - ``"mse"`` (Gaussian only):
+                  MSE derived from the Gaussian identity.
 
         Notes
         -----
@@ -357,6 +363,8 @@ class AELoss(BaseLoss):
         if self.likelihood == LikelihoodType.GAUSSIAN:
             mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
             metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
+            mse = mse_per_dim * D_x
+            metrics['mse'] = mse.detach().cpu()
 
         return LossComponents(
             total=nll,
