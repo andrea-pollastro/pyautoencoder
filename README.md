@@ -74,7 +74,7 @@ pip install -e .
 The [`examples/`](examples/) directory contains runnable scripts, including:
 
 - **`mnist_ae.py`** – standard Autoencoder on MNIST  
-- **`mnist_vae_fig2.py`** – reproduction of the MNIST VAE experiment from **Kingma & Welling (2013), Fig. 2**
+- **`mnist_vae_kingma2013.py`** – reproduction of the MNIST VAE experiment from **Kingma & Welling (2013), Fig. 2**
 
 These examples are also documented and explained in the [online documentation](https://pyautoencoder.readthedocs.io/en/latest/).
 
