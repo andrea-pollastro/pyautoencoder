@@ -2,10 +2,6 @@
 
 A clean, modular PyTorch library for building and training autoencoders.
 
-<!-- <p align="center">
-  <img src="assets/logo_nobackground.png" alt="pyautoencoder logo" width="220"/>
-</p> -->
-
 ![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
 
 <p align="center">
@@ -16,6 +12,7 @@ A clean, modular PyTorch library for building and training autoencoders.
   <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml/badge.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
   <a href="https://pepy.tech/project/pyautoencoder"><img alt="Downloads" src="https://pepy.tech/badge/pyautoencoder"></a>
+  <a href="https://pyautoencoder.readthedocs.io/en/latest/"><img alt="Documentation Status" src="https://readthedocs.org/projects/pyautoencoder/badge/?version=latest"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social"></a>
 </p>
 
@@ -26,7 +23,7 @@ A clean, modular PyTorch library for building and training autoencoders.
 PyAutoencoder is designed to offer **simple and easy access to autoencoder frameworks**. Here's what it offers:
 
 - **Minimal, composable API**  
-You don't have to inherit from complicated base classes or learn a new training loop. Simply provide your own PyTorch nn.Module encoder and decoder, and plug them into the ready‑to‑use autoencoder wrappers. This makes it easy to experiment with different architectures (e.g. MLPs, CNNs) while reusing the same training pipeline.
+  You don't have to inherit from complicated base classes or learn a new training loop. Simply provide your own PyTorch nn.Module encoder and decoder, and plug them into the ready‑to‑use autoencoder wrappers. This makes it easy to experiment with different architectures (e.g. MLPs, CNNs) while reusing the same training pipeline.
 
 - **Ready‑to‑use autoencoders**
   The library ships with working implementations of autoencoders, each paired with their respective loss functions. You can start training in a few lines, without re‑implementing reconstruction likelihoods, KL divergence, or other boilerplate.
@@ -45,6 +42,19 @@ You don't have to inherit from complicated base classes or learn a new training 
 
 ---
 
+## Documentation
+
+Full documentation (installation, tutorials, API reference, and examples) is available at:
+
+👉 **https://pyautoencoder.readthedocs.io/en/latest/**
+
+In particular, see:
+
+- **Examples → MNIST Autoencoder** – simple AE on MNIST  
+- **Examples → MNIST VAE (Kingma & Welling 2013)** – reproduction of Fig. 2  
+
+---
+
 ## Installation
 
 ```bash
@@ -59,66 +69,16 @@ cd pyautoencoder
 pip install -e .
 ```
 
-## Quick start
-
-```python
-import torch
-import torch.nn as nn
-from pyautoencoder.variational import VAE
-from pyautoencoder.loss import VAELoss
-
-# Define encoder/decoder
-encoder = nn.Sequential(
-    nn.Linear(784, 512), 
-    nn.ReLU(),
-    nn.Linear(512, 256)
-)
-
-decoder = nn.Sequential(
-    nn.Linear(256, 512), 
-    nn.ReLU(),
-    nn.Linear(512, 784)
-)
-
-# Model
-vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
-
-# Loss
-criterion = VAELoss(beta=1.0, likelihood="gaussian")
-optimizer = torch.optim.Adam(vae.parameters())
-for x in dataloader:
-    optimizer.zero_grad()
-    out = vae(x)
-    losses = criterion(out, x)
-    losses.total.backward() # negative ELBO
-    optimizer.step()
-
-    # optional: log components
-    log_likelihood = losses.components["log_likelihood"]
-    kl_divergence = losses.components["kl_divergence"]
-```
-
-## Built‑in models
-
-- **`AE`** — standard Autoencoder
-  ```python
-  from pyautoencoder.vanilla import AE
-  from pyautoencoder.loss import AELoss
-  ae = AE(encoder=encoder, decoder=decoder)
-  criterion = AELoss(likelihood="gaussian") # or bernoulli
-  ```
-
-- **`VAE`** — Variational Autoencoder
-  ```python
-  from pyautoencoder.variational import VAE, VAELoss
-  from pyautoencoder.loss import VAELoss
-  vae = VAE(encoder=encoder, decoder=decoder, latent_dim=32)
-  criterion = VAELoss(beta=1.0, likelihood="gaussian") # or bernoulli
-  ```
-
 ## Examples
 
-See the [`examples/`](examples/) folder for runnable scripts showing example of usage.
+The [`examples/`](examples/) directory contains runnable scripts, including:
+
+- **`mnist_ae.py`** – standard Autoencoder on MNIST  
+- **`mnist_vae_fig2.py`** – reproduction of the MNIST VAE experiment from **Kingma & Welling (2013), Fig. 2**
+
+These examples are also documented and explained in the [online documentation](https://pyautoencoder.readthedocs.io/en/latest/).
+
+---
 
 ## License
 
