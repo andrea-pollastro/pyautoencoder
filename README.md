@@ -1,6 +1,6 @@
 # PyAutoencoder
 
-A clean, modular PyTorch library for building and training autoencoders.
+A clean, modular PyTorch-based library for building and training autoencoders.
 
 ![logo](https://raw.githubusercontent.com/andrea-pollastro/pyautoencoder/main/assets/logo_nobackground.png)
 
