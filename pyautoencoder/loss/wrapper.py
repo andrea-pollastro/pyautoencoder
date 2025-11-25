@@ -92,7 +92,7 @@ class VAELoss(BaseLoss):
 
         .. math::
 
-            \tfrac{1}{2}\bigl( (x - x_{\hat{}})^2 + \log(2\pi) \bigr).
+            \tfrac{1}{2}\bigl( (x - \hat{x})^2 + \log(2\pi) \bigr).
 
         - Bernoulli (logits):
           per-dimension NLL is given by
@@ -167,8 +167,6 @@ class VAELoss(BaseLoss):
               - ``"beta_kl_per_latent_dim_bits"``:
                   bits per latent dimension
                   (``beta_kl_per_latent_dim_nats / ln(2)``).
-              - ``"mse_per_dim"`` (Gaussian only):
-                  per-dimension MSE derived from the Gaussian identity.
               - ``"mse"`` (Gaussian only):
                   MSE derived from the Gaussian identity.
 
@@ -222,12 +220,9 @@ class VAELoss(BaseLoss):
             'beta_kl_per_latent_dim_bits': beta_kl_per_latent_dim_bits.detach().cpu(),
         }
 
-        # Extra: derive MSE/dim for Gaussian(sigma^2=1)
         if self.likelihood == LikelihoodType.GAUSSIAN:
-            # NLL_per_dim = 0.5*MSE_per_dim + 0.5*log(2pi) ⇒ MSE_per_dim = 2*NLL_per_dim - log(2pi)
-            mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
-            metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
-            mse = mse_per_dim * D_x
+            # NLL_per_dim = 0.5*MSE + 0.5*log(2pi) ⇒ MSE = 2*NLL_per_dim - log(2pi)
+            mse = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
             metrics['mse'] = mse.detach().cpu()
 
         return LossComponents(
@@ -245,8 +240,7 @@ class AELoss(BaseLoss):
     The loss is the reconstruction negative log-likelihood (NLL), computed
     under either a Gaussian (:math:`\sigma^2 = 1`) or Bernoulli likelihood.
     In addition to the scalar NLL, the class reports per-dimension metrics
-    (in nats and bits) and, for the Gaussian case, a derived MSE per input
-    dimension.
+    (in nats and bits) and, for the Gaussian case, a derived MSE.
     """
 
     def __init__(self, likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN):
@@ -260,7 +254,7 @@ class AELoss(BaseLoss):
 
         .. math::
 
-            \tfrac{1}{2}\bigl( (x - x_{\hat{}})^2 + \log(2\pi) \bigr).
+            \tfrac{1}{2}\bigl( (x - \hat{x})^2 + \log(2\pi) \bigr).
 
         - Bernoulli (logits):
           per-dimension NLL is given by
@@ -312,8 +306,6 @@ class AELoss(BaseLoss):
                   :math:`\text{NLL} / D_x` (nats per input dimension).
               - ``"nll_per_dim_bits"``:
                   bits per dimension (``nll_per_dim_nats / ln(2)``).
-              - ``"mse_per_dim"`` (Gaussian only):
-                  per-dimension MSE derived from the Gaussian identity.
               - ``"mse"`` (Gaussian only):
                   MSE derived from the Gaussian identity.
 
@@ -361,9 +353,8 @@ class AELoss(BaseLoss):
         }
 
         if self.likelihood == LikelihoodType.GAUSSIAN:
-            mse_per_dim = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
-            metrics['mse_per_dim'] = mse_per_dim.detach().cpu()
-            mse = mse_per_dim * D_x
+            # NLL_per_dim = 0.5*MSE + 0.5*log(2pi) ⇒ MSE = 2*NLL_per_dim - log(2pi)
+            mse = torch.clamp(2.0 * nll_per_dim_nats - LOG_2PI, min=0.0)
             metrics['mse'] = mse.detach().cpu()
 
         return LossComponents(

@@ -179,18 +179,18 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
     Subclasses must implement the following abstract methods:
 
     * ``_encode(x, *args, **kwargs) -> ModelOutput``  
-    Low-level encoder that typically returns a :class:`ModelOutput` with at
-    least a latent code attribute (for example ``z``).
+      Low-level encoder that typically returns a :class:`ModelOutput` with at
+      least a latent code attribute (for example ``z``).
 
     * ``_decode(z, *args, **kwargs) -> ModelOutput``  
-    Low-level decoder that typically returns a :class:`ModelOutput` with at
-    least a reconstruction attribute (for example ``x_hat``).
+      Low-level decoder that typically returns a :class:`ModelOutput` with at
+      least a reconstruction attribute (for example ``x_hat``).
 
     * ``forward(x, *args, **kwargs) -> ModelOutput``  
-    Full forward pass used during training. This usually combines encoding
-    and decoding and returns a :class:`ModelOutput` that may contain both
-    ``z`` and ``x_hat``, plus any other quantities needed for loss
-    computation.
+      Full forward pass used during training. This usually combines encoding
+      and decoding and returns a :class:`ModelOutput` that may contain both
+      ``z`` and ``x_hat``, plus any other quantities needed for loss
+      computation.
 
     Inference API (no gradients)
     ----------------------------
@@ -367,6 +367,7 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
         input_sample : torch.Tensor
             A representative input tensor used to infer sizes and initialize
             internal components.
+        
         """
 
         pass

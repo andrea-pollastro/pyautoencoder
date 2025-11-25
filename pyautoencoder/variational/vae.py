@@ -7,7 +7,7 @@ from .stochastic_layers import FullyFactorizedGaussian
 
 @dataclass(slots=True, repr=False)
 class VAEEncodeOutput(ModelOutput):
-    """Output of the VAE encoder stage.
+    r"""Output of the VAE encoder stage.
 
     Attributes
     ----------
@@ -38,7 +38,7 @@ class VAEDecodeOutput(ModelOutput):
 
 @dataclass(slots=True, repr=False)
 class VAEOutput(ModelOutput):
-    """Output of a full VAE forward pass.
+    r"""Output of a full VAE forward pass.
 
     Attributes
     ----------
@@ -108,7 +108,7 @@ class VAE(BaseAutoencoder):
 
     # --- training-time hooks required by BaseAutoencoder ---
     def _encode(self, x: torch.Tensor, S: int = 1) -> VAEEncodeOutput:
-        """Encode inputs and draw Monte Carlo latent samples.
+        r"""Encode inputs and draw Monte Carlo latent samples.
 
         Parameters
         ----------
