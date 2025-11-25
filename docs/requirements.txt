@@ -1,0 +1,3 @@
+torch
+sphinx
+pydata-sphinx-theme
