@@ -1,8 +1,7 @@
-Welcome to PyAutoencoder's documentation!
-=========================================
+PyAutoencoder
+=============
 
-**PyAutoencoder** is a PyTorch-based library providing ready-to-use 
-implementations of state-of-the-art autoencoder architectures in PyTorch. 
+A library providing ready-to-use implementations of state-of-the-art autoencoder architectures in PyTorch. 
 
 .. toctree::
    :maxdepth: 2
