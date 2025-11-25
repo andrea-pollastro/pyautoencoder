@@ -72,11 +72,11 @@ def test_aeloss_gaussian_matches_manual_nll_and_metrics():
     assert torch.allclose(m["nll_per_dim_nats"], nll_per_dim_nats_manual.cpu(), atol=1e-6)
     assert torch.allclose(m["nll_per_dim_bits"], nll_per_dim_bits_manual.cpu(), atol=1e-6)
 
-    # mse_per_dim should exist and follow the identity:
+    # mse should exist and follow the identity:
     # MSE_per_dim = 2*NLL_per_dim - log(2π)
-    assert "mse_per_dim" in m
+    assert "mse" in m
     mse_per_dim_manual = max(0.0, float(2.0 * nll_per_dim_nats_manual - LOG_2PI))
-    assert torch.allclose(m["mse_per_dim"], torch.tensor(mse_per_dim_manual), atol=1e-6)
+    assert torch.allclose(m["mse"], torch.tensor(mse_per_dim_manual), atol=1e-6)
 
     # metrics must be detached & on CPU
     for v in m.values():
@@ -109,8 +109,8 @@ def test_aeloss_gaussian_perfect_reconstruction_gives_mse_zero():
         atol=1e-5,
     )
 
-    # mse_per_dim ≈ 0 (clamped non-negative)
-    assert torch.allclose(m["mse_per_dim"], torch.tensor(0.0), atol=1e-6)
+    # mse ≈ 0 (clamped non-negative)
+    assert torch.allclose(m["mse"], torch.tensor(0.0), atol=1e-6)
 
 def test_aeloss_bernoulli_matches_manual_nll_and_has_no_mse_metric():
     B, D = 3, 4
@@ -144,8 +144,8 @@ def test_aeloss_bernoulli_matches_manual_nll_and_has_no_mse_metric():
     assert torch.allclose(m["nll_per_dim_nats"], nll_per_dim_nats_manual.cpu(), atol=1e-6)
     assert torch.allclose(m["nll_per_dim_bits"], nll_per_dim_bits_manual.cpu(), atol=1e-6)
 
-    # For Bernoulli, 'mse_per_dim' should NOT be present
-    assert "mse_per_dim" not in m
+    # For Bernoulli, 'mse' should NOT be present
+    assert "mse" not in m
 
     # Grad check
     loss.total.backward()
@@ -228,8 +228,8 @@ def test_vaeloss_gaussian_matches_compute_elbo_and_metrics():
         atol=1e-6,
     )
 
-    # mse_per_dim present for Gaussian
-    assert "mse_per_dim" in m
+    # mse present for Gaussian
+    assert "mse" in m
 
     # metrics detached & CPU
     for v in m.values():
@@ -269,8 +269,8 @@ def test_vaeloss_gaussian_perfect_reconstruction_and_zero_kl():
         atol=1e-5,
     )
 
-    # mse_per_dim should be ~0
-    assert torch.allclose(m["mse_per_dim"], torch.tensor(0.0), atol=1e-6)
+    # mse should be ~0
+    assert torch.allclose(m["mse"], torch.tensor(0.0), atol=1e-6)
 
 def test_vaeloss_bernoulli_zero_kl_reduces_to_reconstruction_term():
     B, D, Dz, S = 4, 5, 3, 2
@@ -302,8 +302,8 @@ def test_vaeloss_bernoulli_zero_kl_reduces_to_reconstruction_term():
     assert torch.allclose(loss.components["beta_kl_divergence"], elbo_comp.beta_kl_divergence, atol=1e-6)
     assert torch.allclose(loss.components["beta_kl_divergence"], torch.tensor(0.0), atol=1e-7)
 
-    # No mse_per_dim for Bernoulli
-    assert "mse_per_dim" not in (loss.metrics or {})
+    # No mse for Bernoulli
+    assert "mse" not in (loss.metrics or {})
 
 def test_vaeloss_beta_scaling_behaviour():
     B, D, Dz, S = 3, 4, 2, 3
