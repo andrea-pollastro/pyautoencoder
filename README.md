@@ -48,11 +48,6 @@ Full documentation (installation, tutorials, API reference, and examples) is ava
 
 👉 **https://pyautoencoder.readthedocs.io/en/latest/**
 
-In particular, see:
-
-- **Examples → MNIST Autoencoder** – simple AE on MNIST  
-- **Examples → MNIST VAE (Kingma & Welling 2013)** – reproduction of Fig. 2  
-
 ---
 
 ## Installation
