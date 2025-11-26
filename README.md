@@ -69,6 +69,45 @@ cd pyautoencoder
 pip install -e .
 ```
 
+## Quick start
+
+```python
+import torch
+import torch.nn as nn
+from pyautoencoder.variational import VAE
+from pyautoencoder.loss import VAELoss
+
+# Define encoder/decoder
+latent_dim = 32
+encoder = nn.Sequential(
+    nn.Linear(784, 512), 
+    nn.ReLU(),
+)
+
+decoder = nn.Sequential(
+    nn.Linear(latent_dim, 512), 
+    nn.ReLU(),
+    nn.Linear(512, 784)
+)
+
+# Model
+vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+# Loss
+criterion = VAELoss(beta=1.0, likelihood="bernoulli")
+
+optimizer = torch.optim.Adam(vae.parameters())
+for x in dataloader:
+    optimizer.zero_grad()
+    out = vae(x)
+    losses = criterion(out, x)
+    losses.total.backward() # negative ELBO
+    optimizer.step()
+    # optional: log components
+    log_likelihood = losses.components["log_likelihood"]
+    kl_divergence = losses.components["kl_divergence"]
+```
+
 ## Examples
 
 The [`examples/`](examples/) directory contains runnable scripts, including:
