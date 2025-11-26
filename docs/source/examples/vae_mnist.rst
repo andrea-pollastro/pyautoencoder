@@ -29,7 +29,7 @@ hyperparameters, and device configuration.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 1-67
+   :lines: 1-65
 
 Key parameters:
 
@@ -49,7 +49,7 @@ AEVB experiments.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 71-93
+   :lines: 69-91
 
 The :func:`make_dataloaders` function returns training and test dataloaders
 with appropriate preprocessing and optional binarization.
@@ -71,7 +71,7 @@ Weights are initialized with a small Gaussian as described in the paper.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 97-116
+   :lines: 95-114
 
 The model is built explicitly via :meth:`VAE.build`, which infers
 dimension-dependent components from a representative input sample.
@@ -86,7 +86,7 @@ negative-ELBO returned by :class:`VAELoss`.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 119-134
+   :lines: 117-132
 
 This routine is used during training to record both training and test
 ELBO values.
@@ -103,7 +103,7 @@ train and test sets are logged.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 138-192
+   :lines: 136-189
 
 Each evaluation step records:
 
@@ -122,7 +122,7 @@ appearance of Fig. 2 from Kingma & Welling (2013).
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 196-236
+   :lines: 193-233
 
 The figure is saved as ``vae_mnist_fig2_repro.png``.
 
@@ -137,14 +137,14 @@ plotting the final curves.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 240-254
+   :lines: 237-251
 
 The script can be executed directly:
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 255-257
+   :lines: 253-257
 
 
 Full Example Script

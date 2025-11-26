@@ -9,7 +9,6 @@ samples seen. The setup follows the original paper:
 - Hidden size H = 500
 - Mini-batch size M = 100
 - Learning rate selected from {0.01, 0.02, 0.1} (we use 0.02 here)
-- Small weight decay as a proxy for an N(0, I) prior on weights
 - L = 1 Monte Carlo sample for the stochastic latent variable
 """
 
@@ -41,7 +40,6 @@ LATENT_DIMS: List[int] = [3, 5, 10, 20, 200]  # N_z values (paper)
 HIDDEN_SIZE: int = 500                        # hidden layer size (encoder/decoder, MNIST)
 BATCH_SIZE: int = 100                         # M = 100 (paper)
 LEARNING_RATE: float = 0.02                   # chosen from {0.01, 0.02, 0.1} (paper)
-WEIGHT_DECAY: float = 1e-4                    # small weight decay ~ N(0, I) prior
 MC_SAMPLES: int = 1                           # L = 1 (paper)
 TARGET_TRAIN_SAMPLES: int = int(1e7)          # stop after this many training samples
 EVAL_EVERY_SAMPLES: int = int(1e5)            # evaluate and log every this many samples
@@ -144,7 +142,6 @@ def train_one_setting(
     optimizer = torch.optim.Adagrad(
         model.parameters(),
         lr=LEARNING_RATE,
-        weight_decay=WEIGHT_DECAY,
     )
 
     logs: List[Dict[str, float]] = []
