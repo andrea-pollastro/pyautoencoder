@@ -36,7 +36,7 @@ class LossComponents:
 
     total: torch.Tensor
     components: Dict[str, torch.Tensor]
-    metrics: Optional[Dict[str, torch.Tensor]] = None
+    metrics: Dict[str, torch.Tensor]
 
 class BaseLoss:
     """Abstract base class for loss wrappers.
