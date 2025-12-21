@@ -29,7 +29,7 @@ hyperparameters, and device configuration.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 1-65
+   :lines: 1-64
 
 Key parameters:
 
@@ -49,7 +49,7 @@ AEVB experiments.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 69-91
+   :lines: 68-90
 
 The :func:`make_dataloaders` function returns training and test dataloaders
 with appropriate preprocessing and optional binarization.
@@ -63,7 +63,7 @@ Each VAE consists of:
 * a single-hidden-layer encoder mapping :math:`x \mapsto (\mu, \log \sigma^2)`,
 * a single-hidden-layer decoder mapping :math:`z \mapsto \hat{x}`,
 * Tanh nonlinearities,
-* linear output logits interpreted by :class:`~pyautoencoder.loss.VAELoss`
+* linear output logits interpreted by :meth:`VAE.compute_loss`
   under a Bernoulli likelihood.
 
 Weights are initialized with a small Gaussian as described in the paper.
@@ -71,7 +71,7 @@ Weights are initialized with a small Gaussian as described in the paper.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 95-114
+   :lines: 94-111
 
 The model is built explicitly via :meth:`VAE.build`, which infers
 dimension-dependent components from a representative input sample.
@@ -80,13 +80,13 @@ dimension-dependent components from a representative input sample.
 ELBO Evaluation
 ---------------
 
-We evaluate the ELBO over a dataloader by negating the average
-negative-ELBO returned by :class:`VAELoss`.
+We evaluate the ELBO over a dataloader by summing the batch-wise ELBO
+diagnostics returned by :meth:`VAE.compute_loss`.
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 117-132
+   :lines: 114-129
 
 This routine is used during training to record both training and test
 ELBO values.
@@ -103,13 +103,20 @@ train and test sets are logged.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 136-189
+   :lines: 133-186
 
-Each evaluation step records:
+Each training step:
 
-* number of processed samples,
-* average ELBO on the training set,
-* average ELBO on the test set.
+* Draws :math:`S` Monte Carlo samples from :math:`q(z \mid x)`,
+* Computes the negative ELBO via :meth:`VAE.compute_loss` with ``likelihood='bernoulli'``,
+* Backpropagates gradients through encoder and decoder,
+* Records evaluation metrics periodically.
+
+The ELBO diagnostics contain:
+
+* ``elbo`` – Evidence Lower Bound value,
+* ``log_likelihood`` – batch-mean reconstruction term,
+* ``kl_divergence`` – batch-mean KL divergence.
 
 
 Plotting the Results
@@ -122,7 +129,7 @@ appearance of Fig. 2 from Kingma & Welling (2013).
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 193-233
+   :lines: 190-230
 
 The figure is saved as ``vae_mnist_fig2_repro.png``.
 
@@ -137,14 +144,14 @@ plotting the final curves.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 237-251
+   :lines: 234-248
 
 The script can be executed directly:
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 253-257
+   :lines: 250-251
 
 
 Full Example Script

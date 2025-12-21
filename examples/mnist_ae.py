@@ -12,7 +12,6 @@ from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 
 from pyautoencoder.vanilla import AE
-from pyautoencoder.loss import AELoss
 
 
 # ---------------- Config ---------------- #
@@ -63,12 +62,9 @@ def make_autoencoder(latent_dim: int) -> AE:
     model.build(input_sample=torch.randn(1, 1, 28, 28))
     return model
 
-# Reconstruction loss
-loss_fn = AELoss(likelihood="bernoulli")
-
 # ---------------- Train ----------------- #
 def train(
-    model: nn.Module,
+    model: AE,
     train_loader: DataLoader,
     num_epochs: int,
     lr: float = LEARNING_RATE,
@@ -79,9 +75,7 @@ def train(
 
     start_time = time.time()
     for epoch in range(1, num_epochs + 1):
-        running_NLL = 0.0
-        running_NLL_dim_nats = 0.0
-        running_NLL_dim_bits = 0.0
+        running_log_likelihood = 0.0
         n = 0
 
         for x, _ in train_loader:
@@ -89,25 +83,20 @@ def train(
             optimizer.zero_grad()
 
             out = model(x)
-            loss_info = loss_fn(x, out)
-            loss_info.total.backward()
+            loss_info = model.compute_loss(x, out, likelihood='bernoulli')
+            loss_info.objective.backward()
             optimizer.step()
 
             batch_size = x.size(0)
-            running_NLL += loss_info.total.item() * batch_size
-            running_NLL_dim_nats += loss_info.metrics['nll_per_dim_nats'].item() * batch_size # type: ignore
-            running_NLL_dim_bits += loss_info.metrics['nll_per_dim_bits'].item() * batch_size # type: ignore
+            running_log_likelihood += loss_info.diagnostics['log_likelihood'] * batch_size
             n += batch_size
 
-        avg_NLL = running_NLL / n
-        avg_NLL_dim_nats = running_NLL_dim_nats / n
-        avg_NLL_dim_bits = running_NLL_dim_bits / n
+        avg_NLL = running_log_likelihood / n
         elapsed = time.time() - start_time
 
         print(
             f"Epoch {epoch:3d}/{num_epochs}  "
-            f"NLL={avg_NLL:.4f} | "
-            f"NLL/dim={avg_NLL_dim_nats:.4f} nats ({avg_NLL_dim_bits:.4f} bits) | "
+            f"LogLikelihood={avg_NLL:.4f} | "
             f"(elapsed {elapsed:.1f}s)"
         )
 
@@ -115,7 +104,7 @@ def train(
 # ---------------- Plot (TEST samples) ---------------- #
 @torch.no_grad()
 def plot_test_reconstructions(
-    model: nn.Module,
+    model: AE,
     test_loader: DataLoader,
     latent_dim: int,
     num_cols: int = NUM_RECON_COLS,

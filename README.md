@@ -70,7 +70,6 @@ pip install -e .
 import torch
 import torch.nn as nn
 from pyautoencoder.variational import VAE
-from pyautoencoder.loss import VAELoss
 
 # Define encoder/decoder
 latent_dim = 32
@@ -88,19 +87,16 @@ decoder = nn.Sequential(
 # Model
 vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
 
-# Loss
-criterion = VAELoss(beta=1.0, likelihood="bernoulli")
-
 optimizer = torch.optim.Adam(vae.parameters())
 for x in dataloader:
     optimizer.zero_grad()
     out = vae(x)
-    losses = criterion(out, x)
-    losses.total.backward() # negative ELBO
+    loss_results = vae.compute_loss(out, x, beta=1, likelihood='bernoulli')
+    loss_results.objective.backward() # negative ELBO
     optimizer.step()
     # optional: log components
-    log_likelihood = losses.components["log_likelihood"]
-    kl_divergence = losses.components["kl_divergence"]
+    log_likelihood = loss_results.components["log_likelihood"]
+    kl_divergence = loss_results.components["kl_divergence"]
 ```
 
 ## Examples
@@ -123,11 +119,12 @@ This project is released under the **MIT License**. See [LICENSE](LICENSE).
 If you use this package in academic work, please cite:
 
 ```bibtex
-@misc{pollastro2025pyautoencoder,
-  author       = {Andrea Pollastro},
-  title        = {pyautoencoder},
-  year         = {2025},
-  howpublished = {GitHub repository},
-  url          = {https://github.com/andrea-pollastro/pyautoencoder}
+@article{pollastro2025sincvae,
+  title={SincVAE: A new semi-supervised approach to improve anomaly detection on EEG data using SincNet and variational autoencoder},
+  author={Pollastro, Andrea and Isgr{\`o}, Francesco and Prevete, Roberto},
+  journal={Computer Methods and Programs in Biomedicine Update},
+  pages={100213},
+  year={2025},
+  publisher={Elsevier}
 }
 ```

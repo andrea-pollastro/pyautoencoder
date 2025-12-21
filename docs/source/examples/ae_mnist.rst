@@ -16,7 +16,7 @@ reproducibility.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 1-34
+   :lines: 1-33
 
 Key elements in this section include:
 
@@ -36,7 +36,7 @@ used to map images to the :math:`[0, 1]` range.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 38-45
+   :lines: 37-44
 
 The :func:`make_dataloaders` function returns two
 :class:`torch.utils.data.DataLoader` objects that supply batches to the
@@ -54,16 +54,15 @@ the image from this latent vector.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 49-68
+   :lines: 48-63
 
 Notes:
 
 * The final decoder layer is **linear** and produces logits.
 * The model is explicitly built through :meth:`AE.build`, which infers
   required shapes from a representative sample.
-* Reconstruction loss is handled by
-  :class:`pyautoencoder.loss.AELoss` using a Bernoulli likelihood
-  (which interprets the decoder output as logits).
+* Reconstruction loss is computed via the :meth:`AE.compute_loss` method,
+  which uses a Bernoulli likelihood (interpreting the decoder output as logits).
 
 
 Training Loop
@@ -71,23 +70,23 @@ Training Loop
 
 Training uses standard mini-batch gradient descent with the
 :class:`torch.optim.Adam` optimizer. During each iteration, we compute
-the reconstruction negative log-likelihood (NLL) as well as size-normalized
-metrics such as NLL per input dimension (in both nats and bits).
+the reconstruction log-likelihood and related diagnostics.
 
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 71-113
+   :lines: 66-101
 
 For each batch:
 
 * The model produces latent codes and reconstructions: ``out = model(x)``.
-* :class:`AELoss` returns a structured object containing:
+* :meth:`AE.compute_loss` returns a :class:`~pyautoencoder.loss.LossResult`
+  containing:
 
-  - ``total`` – batch-mean NLL (in nats),
-  - ``metrics['nll_per_dim_nats']`` – NLL per input dimension (nats),
-  - ``metrics['nll_per_dim_bits']`` – NLL per input dimension (bits).
+  - ``objective`` – batch-mean negative log-likelihood (NLL) in nats,
+  - ``diagnostics['log_likelihood']`` – batch-mean log-likelihood (negative of objective).
 
+* The loss is backpropagated through the entire model.
 * These quantities are accumulated over the epoch and reported in the log.
 
 
@@ -101,7 +100,7 @@ a sigmoid to convert them to pixel intensities suitable for display.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 118-155
+   :lines: 105-145
 
 
 Putting It All Together
@@ -114,14 +113,14 @@ test-set reconstructions.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 159-175
+   :lines: 149-165
 
 The script can also be executed directly:
 
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 177-179
+   :lines: 168-169
 
 
 Full Example Script

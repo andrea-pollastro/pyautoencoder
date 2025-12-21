@@ -1,14 +1,21 @@
 Loss Functions & Utilities
 ===========================
 
-.. automodule:: pyautoencoder.loss
-   :members: AELoss, VAELoss
-   :undoc-members:
-   :show-inheritance:
-   :special-members: __init__, __call__
+Core Loss Functions
+-------------------
 
-.. automodule:: pyautoencoder.loss
-   :members: LossComponents
+.. autofunction:: pyautoencoder.loss.log_likelihood
+.. autofunction:: pyautoencoder.loss.kl_divergence_diag_gaussian
+
+Data Structures & Types
+-----------------------
+
+.. autoclass:: pyautoencoder.loss.LossResult
+   :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: total, components, metrics
+   :no-index:
+
+.. autoclass:: pyautoencoder.loss.LikelihoodType
+   :members:
+   :undoc-members:

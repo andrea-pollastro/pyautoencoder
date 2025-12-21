@@ -10,3 +10,15 @@ Warning
 This is an internal API. Most users should work with :class:`vanilla.AE` or
 :class:`variational.VAE` instead of using these base classes directly.
 """
+
+from .base import (
+    BaseAutoencoder,
+    ModelOutput,
+    NotBuiltError,
+)
+
+__all__ = [
+    'BaseAutoencoder',
+    'ModelOutput',
+    'NotBuiltError',
+]

@@ -1,7 +1,8 @@
 import math
 import torch
 import torch.nn.functional as F
-from typing import Union
+from dataclasses import dataclass
+from typing import Union, Optional, Dict
 from enum import Enum
 
 class LikelihoodType(Enum):
@@ -21,6 +22,28 @@ class LikelihoodType(Enum):
 
 # Cache for log(2pi) constants per (device, dtype)
 _LOG2PI_CACHE = {}
+
+@dataclass(slots=True, repr=True)
+class LossResult:
+    r"""Container for loss computation results with objective and diagnostics.
+
+    This dataclass holds the output of model loss computation methods
+    (:meth:`AE.compute_loss`, :meth:`VAE.compute_loss`, etc.), separating
+    the optimizable objective from optional diagnostic metrics.
+
+    Attributes
+    ----------
+    objective : torch.Tensor
+        Scalar loss to optimize (e.g., negative log-likelihood or negative ELBO).
+        Maintains gradient information for backpropagation.
+    diagnostics : Dict[str, float]
+        Dictionary of scalar metrics for monitoring and logging.
+        Values are detached float scalars (not tensors) and do not track gradients.
+        Examples include per-dimension NLL, KL divergence, ELBO, MSE, etc.
+    """
+
+    objective: torch.Tensor
+    diagnostics: Dict[str, float]
 
 def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
     r"""Return a cached value of :math:`\log(2\pi)` for the given device and dtype.
@@ -116,3 +139,60 @@ def log_likelihood(x: torch.Tensor,
     
     else:
         raise ValueError(f"Unsupported likelihood: {likelihood}")
+    
+def kl_divergence_diag_gaussian(
+    mu_q: torch.Tensor, 
+    log_var_q: torch.Tensor, 
+    mu_p: Optional[torch.Tensor] = None, 
+    log_var_p: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+    r"""Compute the KL divergence :math:`\mathrm{KL}(q(z \mid x) \,\|\, p(z))`
+    between two diagonal Gaussian distributions.
+
+    The approximate posterior is 
+    :math:`q(z \mid x) = \mathcal{N}(\mu_q, \operatorname{diag}(\exp(\log \sigma_q^2)))`.
+    
+    The prior is 
+    :math:`p(z) = \mathcal{N}(\mu_p, \operatorname{diag}(\exp(\log \sigma_p^2)))`.
+    If :math:`\mu_p` and :math:`\log \sigma_p^2` are None, :math:`p(z) = \mathcal{N}(0, I)`.
+
+    The closed-form KL divergence is:
+
+    .. math::
+
+        \mathrm{KL}(q \,\|\, p) = \frac{1}{2} \sum_{d} \left( 
+            (\log \sigma_{p,d}^2 - \log \sigma_{q,d}^2) + 
+            \frac{\exp(\log \sigma_{q,d}^2) + (\mu_{q,d} - \mu_{p,d})^2}{\exp(\log \sigma_{p,d}^2)} - 1 
+        \right)
+
+    Parameters
+    ----------
+    mu_q : torch.Tensor
+        Mean of the first distribution ``[B, D_z]``.
+    log_var_q : torch.Tensor
+        Log-variance of the first distribution ``[B, D_z]``.
+    mu_p : torch.Tensor, optional
+        Mean of the second distribution ``[B, D_z]``. Defaults to 0.
+    log_var_p : torch.Tensor, optional
+        Log-variance of the second distribution ``[B, D_z]``. Defaults to 0.
+
+    Returns
+    -------
+    torch.Tensor
+        Per-sample KL divergences of shape [B].
+    """
+    
+    # Se p non è specificata, assumiamo N(0, I)
+    if mu_p is None:
+        mu_p = torch.zeros_like(mu_q)
+    if log_var_p is None:
+        log_var_p = torch.zeros_like(log_var_q)
+
+    # Calcolo dei termini
+    var_q = log_var_q.exp()
+    var_p = log_var_p.exp()
+    
+    term1 = log_var_p - log_var_q
+    term2 = (var_q + (mu_q - mu_p).pow(2)) / var_p
+    
+    return 0.5 * torch.sum(term1 + term2 - 1, dim=-1)

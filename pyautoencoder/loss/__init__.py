@@ -1,7 +1,13 @@
-from .wrapper import AELoss, VAELoss, LossComponents
+from .base import (
+    log_likelihood,
+    LossResult,
+    LikelihoodType,
+    kl_divergence_diag_gaussian
+)
 
 __all__ = [
-    'AELoss',
-    'VAELoss',
-    'LossComponents',
+    'log_likelihood',
+    'LossResult',
+    'LikelihoodType',
+    'kl_divergence_diag_gaussian',
 ]

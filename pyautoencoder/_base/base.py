@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from functools import wraps
 
+from ..loss.base import LossResult
+
 class NotBuiltError(RuntimeError): 
     """Exception raised when a guarded method is called on a model that has not been built.
 
@@ -419,4 +421,30 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
                 "Call model.build(example_x) so parameters exist, then load."
             )
         return super().load_state_dict(state_dict=state_dict, strict=strict, assign=assign)
-        
+    
+    @abstractmethod
+    def compute_loss(self, x: torch.Tensor, model_output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
+        """Compute the loss for the autoencoder.
+
+        This abstract method must be implemented by subclasses to compute
+        the appropriate loss objective for the model. Subclasses may support
+        additional hyperparameters and configuration options.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Ground-truth inputs of shape ``[B, ...]``.
+        model_output : ModelOutput
+            Output from the forward pass, containing reconstructions, latent codes,
+            and any other information needed to compute the loss.
+        *args
+            Additional positional arguments (subclass-specific).
+        **kwargs
+            Additional keyword arguments (subclass-specific).
+
+        Returns
+        -------
+        LossResult
+            Result containing the loss objective and optional diagnostics.
+        """
+        pass

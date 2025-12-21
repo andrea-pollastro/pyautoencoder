@@ -420,6 +420,17 @@ class ToyAutoencoder(BaseAutoencoder):
         x_hat = self.decoder(z)
         return AEForwardOutput(z=z, x_hat=x_hat)
 
+    def compute_loss(self, x: torch.Tensor, model_output: ModelOutput, *args, **kwargs):
+        """Dummy loss function for testing."""
+        # Simple dummy loss: mean squared error between input and reconstruction
+        x_hat = model_output.x_hat  # type: ignore
+        mse = ((x - x_hat) ** 2).mean()
+        from pyautoencoder.loss.base import LossResult
+        return LossResult(
+            objective=mse,
+            diagnostics={"mse": mse.item()}
+        )
+
 
 def test_base_autoencoder_is_abstract():
     # Cannot instantiate BaseAutoencoder directly due to abstract methods

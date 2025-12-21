@@ -1,7 +1,14 @@
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
+from typing import Union, Dict
 
+from ..loss.base import (
+    LikelihoodType, 
+    log_likelihood, 
+    kl_divergence_diag_gaussian, 
+    LossResult
+)
 from .._base.base import BaseAutoencoder, ModelOutput
 from .stochastic_layers import FullyFactorizedGaussian
 
@@ -25,7 +32,7 @@ class VAEEncodeOutput(ModelOutput):
 
 @dataclass(slots=True, repr=False)
 class VAEDecodeOutput(ModelOutput):
-    """Output of the VAE decoder stage.
+    r"""Output of the VAE decoder stage.
 
     Attributes
     ----------
@@ -34,7 +41,6 @@ class VAEDecodeOutput(ModelOutput):
     """
 
     x_hat: torch.Tensor
-
 
 @dataclass(slots=True, repr=False)
 class VAEOutput(ModelOutput):
@@ -200,3 +206,115 @@ class VAE(BaseAutoencoder):
         self.sampling_layer.build(f)
         assert self.sampling_layer.built, 'Sampling layer building failed.'
         self._built = True
+
+    def compute_loss(self,
+                     x: torch.Tensor, 
+                     vae_output: VAEOutput,
+                     beta: float = 1,
+                     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
+        r"""Compute the Evidence Lower Bound (ELBO) for a (beta-)Variational Autoencoder.
+
+        This method implements the beta-VAE objective:
+
+        .. math::
+
+            \mathcal{L}(x; \beta)
+                = \mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]
+                \;-\;
+                \beta \, \mathrm{KL}(q(z \mid x) \,\|\, p(z)).
+
+        The reconstruction term :math:`\log p(x \mid z)` is computed using
+        :func:`loss.base.log_likelihood`, which supports both Gaussian and
+        Bernoulli likelihoods.
+
+        Monte Carlo estimation
+        ----------------------
+        If ``x_hat`` in ``vae_output`` contains ``S`` Monte Carlo samples, 
+        the expectation :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
+
+        .. math::
+
+            \mathbb{E}_{q(z \mid x)}[\log p(x \mid z)]
+                \approx \frac{1}{S} \sum_{s=1}^{S}
+                \log p(x \mid z^{(s)}).
+
+        Broadcasting
+        ----------------------
+        - If ``x_hat`` has shape ``[B, ...]``, it is expanded to ``[B, 1, ...]``.
+        - ``x`` is broadcast to match the sample dimension of ``x_hat``.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Ground-truth inputs, shape ``[B, ...]``.
+        vae_output : VAEOutput
+            Output from the VAE forward pass. Expected fields include:
+
+            - ``x_hat`` (torch.Tensor): Reconstructed samples, shape ``[B, ...]`` or ``[B, S, ...]``.
+            - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``.
+            - ``log_var`` (torch.Tensor): Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
+
+        likelihood : Union[str, LikelihoodType], optional
+            Likelihood model for the reconstruction term. 
+            Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
+        beta : float, optional
+            Weighting factor for the KL term (beta-VAE). 
+            ``beta = 1`` yields the standard VAE. Defaults to 1.
+
+        Returns
+        -------
+        LossResult
+            Result containing:
+            
+            * **objective** – Negative mean ELBO (scalar).
+            * **diagnostics** – Dictionary with:
+
+              - ``"elbo"``: Mean ELBO over the batch.
+              - ``"log_likelihood"``: Mean reconstruction term :math:`\mathbb{E}_{q}[\log p(x \mid z)]`.
+              - ``"kl_divergence"``: Mean :math:`\mathrm{KL}(q \,\|\, p)` over the batch.
+
+        Notes
+        -----
+        - All returned diagnostics are **batch means**.
+        - Gradients flow through the decoder; neither input is detached.
+        """
+        x_hat = vae_output.x_hat
+        mu = vae_output.mu
+        log_var = vae_output.log_var
+
+        if isinstance(likelihood, str):
+            likelihood = LikelihoodType(likelihood.lower())
+
+        # Ensure a sample dimension S exists -> [B, S, ...]
+        if x_hat.dim() == x.dim():
+            x_hat = x_hat.unsqueeze(1)  # S = 1
+        B, S = x_hat.size(0), x_hat.size(1)
+
+        # Broadcast x to match x_hat's [B, S, ...] shape
+        x_expanded = x.unsqueeze(1)  # [B, 1, ...]
+        if x_expanded.shape != x_hat.shape:
+            # expand_as is a view (no real data copy) when only singleton dims are expanded
+            x_expanded = x_expanded.expand_as(x_hat)
+
+        # log p(x|z): elementwise -> sum over features => [B, S]
+        log_px_z = log_likelihood(x_expanded, x_hat, likelihood=likelihood)
+        log_px_z = log_px_z.reshape(B, S, -1).sum(-1)
+
+        # E_q[log p(x|z)] via Monte Carlo average across S: [B]
+        E_log_px_z = log_px_z.mean(dim=1)
+
+        # KL(q||p): [B]
+        kl_q_p = kl_divergence_diag_gaussian(mu, log_var)
+
+        # ELBO per sample and batch means (retain grads)
+        elbo_per_sample = E_log_px_z - beta * kl_q_p          # [B]
+        elbo = elbo_per_sample.mean()                         # scalar
+
+        return LossResult(
+            objective = -elbo,
+            diagnostics = {
+                'elbo': elbo.item(),
+                'log_likelihood': E_log_px_z.mean().item(),
+                'kl_divergence': kl_q_p.mean().item(),
+            }
+        )

@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
+from typing import Union, Dict
 
 from .._base.base import BaseAutoencoder, ModelOutput
+from ..loss.base import log_likelihood, LikelihoodType, LossResult
 
 @dataclass(slots=True, repr=False)
 class AEEncodeOutput(ModelOutput):
@@ -140,3 +142,68 @@ class AE(BaseAutoencoder):
         """
 
         self._built = True
+
+    def compute_loss(self, 
+                     x: torch.Tensor,
+                     ae_output: AEOutput,
+                     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
+        r"""Compute Autoencoder reconstruction loss.
+
+        The scalar loss is the batch-mean reconstruction negative log-likelihood (NLL).
+        The method also computes diagnostics to monitor model behavior.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Ground-truth inputs of shape ``[B, ...]``.
+        ae_output : AEOutput
+            Output from the AE forward pass. Expected fields include:
+
+            - ``x_hat`` (torch.Tensor): Reconstructions, shape ``[B, ...]``.
+            - ``z`` (torch.Tensor): Latent representation (unused by this method).
+
+        likelihood : Union[str, LikelihoodType], optional
+            Likelihood model for computing the reconstruction term.
+            Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
+
+        Returns
+        -------
+        LossResult
+            Result containing:
+
+            * **objective** – Scalar batch-mean reconstruction NLL (in nats).
+            * **diagnostics** – Dictionary with:
+
+              - ``"log_likelihood"``: 
+                  Negative of the objective (batch-mean log-likelihood).
+
+        Notes
+        -----
+        Reductions follow:
+        
+        1. Elementwise log-likelihood
+        2. Sum over feature dimensions
+        3. Mean over the batch.
+
+        Ensure that inputs match the chosen likelihood:
+
+        - Gaussian: continuous data (typically standardized).
+        - Bernoulli: targets in :math:`[0, 1]`, predictions given as logits.
+        """
+        
+        x_hat = ae_output.x_hat
+        if isinstance(likelihood, str):
+            likelihood = LikelihoodType(likelihood.lower())
+        B = x.size(0)
+
+        # Elementwise log-likelihood → per-sample sum → batch mean
+        ll_elem = log_likelihood(x, x_hat, likelihood=likelihood) # [B, ...]
+        ll_per_sample = ll_elem.reshape(B, -1).sum(-1)            # [B]
+        nll = (-ll_per_sample).mean()                             # scalar NLL
+
+        return LossResult(
+            objective=nll,
+            diagnostics={
+                'log_likelihood': -nll.item(),
+            }
+        )

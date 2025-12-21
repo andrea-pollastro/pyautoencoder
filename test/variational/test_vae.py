@@ -322,3 +322,246 @@ def test_vae_output_repr_uses_modeloutput_smart_repr():
     assert "log_var=Tensor(" in s
     assert f"shape={tuple(log_var.shape)}" in s
 
+
+# ================= compute_loss =================
+
+def test_vae_compute_loss_gaussian_likelihood_returns_correct_type():
+    """Test that compute_loss returns LossResult with correct structure."""
+    B, in_features, feat_dim, latent_dim, S = 4, 6, 8, 3, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)  # out_features = in_features
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+
+    # Compute loss with default Gaussian likelihood
+    from pyautoencoder.loss.base import LossResult
+    loss_result = vae.compute_loss(x, vae_output)
+
+    # Check return type and structure
+    assert isinstance(loss_result, LossResult)
+    assert hasattr(loss_result, 'objective')
+    assert hasattr(loss_result, 'diagnostics')
+
+    # objective should be a scalar tensor
+    assert loss_result.objective.dim() == 0
+    assert loss_result.objective.requires_grad is True
+
+    # diagnostics should contain elbo, log_likelihood, kl_divergence
+    assert isinstance(loss_result.diagnostics, dict)
+    assert 'elbo' in loss_result.diagnostics
+    assert 'log_likelihood' in loss_result.diagnostics
+    assert 'kl_divergence' in loss_result.diagnostics
+    
+    # All diagnostics should be floats
+    assert isinstance(loss_result.diagnostics['elbo'], float)
+    assert isinstance(loss_result.diagnostics['log_likelihood'], float)
+    assert isinstance(loss_result.diagnostics['kl_divergence'], float)
+
+
+def test_vae_compute_loss_objective_is_negative_elbo():
+    """Test that objective = -ELBO."""
+    B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+    loss_result = vae.compute_loss(x, vae_output)
+
+    # objective should be negative ELBO
+    elbo = loss_result.diagnostics['elbo']
+    objective = loss_result.objective.item()
+    assert torch.allclose(torch.tensor(objective), torch.tensor(-elbo), atol=1e-6)
+
+
+def test_vae_compute_loss_with_beta_parameter():
+    """Test compute_loss with beta (beta-VAE) parameter."""
+    B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+
+    # Compute with beta=1 (standard VAE)
+    loss_beta1 = vae.compute_loss(x, vae_output, beta=1.0)
+    
+    # Compute with beta=0.5 (less KL weighting)
+    loss_beta05 = vae.compute_loss(x, vae_output, beta=0.5)
+
+    # ELBO should be different (higher for beta < 1 since KL is penalized less)
+    elbo_beta1 = loss_beta1.diagnostics['elbo']
+    elbo_beta05 = loss_beta05.diagnostics['elbo']
+    
+    # beta=0.5 should have higher ELBO (less KL penalty)
+    assert elbo_beta05 > elbo_beta1
+
+
+def test_vae_compute_loss_kl_divergence_nonnegative():
+    """Test that KL divergence is always non-negative."""
+    B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+    loss_result = vae.compute_loss(x, vae_output)
+
+    kl = loss_result.diagnostics['kl_divergence']
+    assert kl >= 0
+
+
+def test_vae_compute_loss_bernoulli_likelihood():
+    """Test compute_loss with Bernoulli likelihood."""
+    B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
+    x = torch.sigmoid(torch.randn(B, in_features))  # Bernoulli needs [0, 1]
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+
+    loss_result = vae.compute_loss(x, vae_output, likelihood='bernoulli')
+
+    assert isinstance(loss_result.objective, torch.Tensor)
+    assert loss_result.objective.dim() == 0
+    assert 'elbo' in loss_result.diagnostics
+    assert 'log_likelihood' in loss_result.diagnostics
+    assert 'kl_divergence' in loss_result.diagnostics
+
+
+def test_vae_compute_loss_multiple_samples():
+    """Test compute_loss with S > 1 samples for Monte Carlo estimation."""
+    B, in_features, feat_dim, latent_dim = 2, 4, 6, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    # Forward with S=1
+    vae_output_s1 = vae.forward(x, S=1)
+    loss_s1 = vae.compute_loss(x, vae_output_s1)
+
+    # Forward with S=5 (more MC samples)
+    vae_output_s5 = vae.forward(x, S=5)
+    loss_s5 = vae.compute_loss(x, vae_output_s5)
+
+    # Both should produce valid LossResult
+    assert isinstance(loss_s1.objective, torch.Tensor)
+    assert isinstance(loss_s5.objective, torch.Tensor)
+    
+    # Shapes should match input batch size
+    assert vae_output_s1.x_hat.shape[0] == B
+    assert vae_output_s5.x_hat.shape[0] == B
+
+
+def test_vae_compute_loss_backward_flows_through_all_params():
+    """Test that gradients flow through encoder, decoder, and sampling layer."""
+    B, in_features, feat_dim, latent_dim, S = 2, 4, 6, 2, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+    loss_result = vae.compute_loss(x, vae_output)
+    loss_result.objective.backward()
+
+    # Check gradients in all components
+    enc_grads = [p.grad for p in encoder.parameters() if p.requires_grad]
+    dec_grads = [p.grad for p in decoder.parameters() if p.requires_grad]
+    sl_grads = [p.grad for p in vae.sampling_layer.parameters() if p.requires_grad]
+
+    assert any(g is not None and torch.any(g != 0) for g in enc_grads)
+    assert any(g is not None and torch.any(g != 0) for g in dec_grads)
+    assert any(g is not None and torch.any(g != 0) for g in sl_grads)
+
+
+def test_vae_compute_loss_batch_size_one():
+    """Test compute_loss with batch_size=1."""
+    in_features, feat_dim, latent_dim, S = 4, 6, 2, 2
+    x = torch.randn(1, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+    loss_result = vae.compute_loss(x, vae_output)
+
+    assert loss_result.objective.dim() == 0
+    assert not torch.isnan(loss_result.objective)
+    assert not torch.isinf(loss_result.objective)
+
+
+def test_vae_compute_loss_with_different_likelihood_formats():
+    """Test that compute_loss handles both string and LikelihoodType inputs."""
+    B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(x)
+
+    vae.train()
+    torch.set_grad_enabled(True)
+
+    vae_output = vae.forward(x, S=S)
+
+    # Test with string
+    loss_str = vae.compute_loss(x, vae_output, likelihood='gaussian')
+    assert isinstance(loss_str.objective, torch.Tensor)
+
+    # Test with LikelihoodType enum
+    from pyautoencoder.loss.base import LikelihoodType
+    loss_enum = vae.compute_loss(x, vae_output, likelihood=LikelihoodType.GAUSSIAN)
+    assert isinstance(loss_enum.objective, torch.Tensor)
+
+    # Both should produce similar results
+    assert torch.allclose(loss_str.objective, loss_enum.objective, atol=1e-6)
+

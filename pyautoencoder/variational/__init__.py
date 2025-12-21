@@ -1,3 +1,13 @@
-from .vae import VAE
+from .vae import (
+    VAE,
+    VAEDecodeOutput,
+    VAEEncodeOutput,
+    VAEOutput
+)
 
-__all__ = ['VAE']
+__all__ = [
+    'VAE',
+    'VAEDecodeOutput',
+    'VAEEncodeOutput',
+    'VAEOutput',
+]

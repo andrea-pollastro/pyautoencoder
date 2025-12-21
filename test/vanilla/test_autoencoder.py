@@ -208,3 +208,162 @@ def test_ae_output_repr_uses_modeloutput_smart_repr():
     assert "z=Tensor(" in s
     assert f"shape={tuple(z.shape)}" in s
     assert f"dtype={z.dtype}" in s
+
+
+# ================= compute_loss =================
+
+def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
+    """Test that compute_loss returns LossResult with correct structure."""
+    batch_size = 4
+    in_features = 8
+    latent_features = 3
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.randn(batch_size, in_features)
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    # Compute loss with default Gaussian likelihood
+    loss_result = ae.compute_loss(x, ae_output)
+
+    # Check return type and structure
+    from pyautoencoder.loss.base import LossResult
+    assert isinstance(loss_result, LossResult)
+    assert hasattr(loss_result, 'objective')
+    assert hasattr(loss_result, 'diagnostics')
+    
+    # objective should be a scalar tensor
+    assert loss_result.objective.dim() == 0
+    assert loss_result.objective.requires_grad is True
+    
+    # diagnostics should contain log_likelihood
+    assert isinstance(loss_result.diagnostics, dict)
+    assert 'log_likelihood' in loss_result.diagnostics
+    assert isinstance(loss_result.diagnostics['log_likelihood'], float)
+
+
+def test_ae_compute_loss_gaussian_likelihood_is_nonnegative():
+    """Test that NLL (objective) is non-negative for Gaussian likelihood."""
+    batch_size = 5
+    in_features = 6
+    latent_features = 2
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.randn(batch_size, in_features)
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    loss_result = ae.compute_loss(x, ae_output, likelihood='gaussian')
+
+    # NLL should be non-negative (it's -log_likelihood)
+    assert loss_result.objective.item() >= 0
+
+
+def test_ae_compute_loss_bernoulli_likelihood():
+    """Test compute_loss with Bernoulli likelihood."""
+    batch_size = 4
+    in_features = 8
+    latent_features = 3
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.sigmoid(torch.randn(batch_size, in_features))  # Bernoulli needs [0, 1]
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    loss_result = ae.compute_loss(x, ae_output, likelihood='bernoulli')
+
+    # Check return structure
+    from pyautoencoder.loss.base import LossResult
+    assert isinstance(loss_result, LossResult)
+    assert loss_result.objective.dim() == 0
+    assert 'log_likelihood' in loss_result.diagnostics
+    assert loss_result.objective.item() >= 0
+
+
+def test_ae_compute_loss_backward_flows_through_x_hat():
+    """Test that gradients flow properly through the loss."""
+    batch_size = 2
+    in_features = 4
+    latent_features = 2
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.randn(batch_size, in_features)
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    loss_result = ae.compute_loss(x, ae_output)
+    loss_result.objective.backward()
+
+    # Check that decoder params have gradients
+    dec_grads = [p.grad for p in decoder.parameters() if p.requires_grad]
+    assert any(g is not None and torch.any(g != 0) for g in dec_grads)
+
+
+def test_ae_compute_loss_diagnostics_log_likelihood_negative_of_objective():
+    """Test that diagnostics log_likelihood = -objective."""
+    batch_size = 3
+    in_features = 5
+    latent_features = 2
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.randn(batch_size, in_features)
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    loss_result = ae.compute_loss(x, ae_output)
+
+    # log_likelihood should be negative of NLL (objective)
+    nll = loss_result.objective.item()
+    ll = loss_result.diagnostics['log_likelihood']
+    assert torch.allclose(
+        torch.tensor(ll),
+        torch.tensor(-nll),
+        atol=1e-6
+    )
+
+
+def test_ae_compute_loss_batch_size_one():
+    """Test compute_loss with batch_size=1."""
+    in_features = 4
+    latent_features = 2
+
+    encoder = SimpleEncoder(in_features=in_features, latent_features=latent_features)
+    decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
+    ae = AE(encoder=encoder, decoder=decoder)
+
+    x = torch.randn(1, in_features)
+    ae.build(x)
+
+    torch.set_grad_enabled(True)
+    ae_output = ae.forward(x)
+
+    loss_result = ae.compute_loss(x, ae_output)
+
+    assert loss_result.objective.dim() == 0
+    assert not torch.isnan(loss_result.objective)
+    assert not torch.isinf(loss_result.objective)

@@ -35,7 +35,6 @@ Train a simple autoencoder on MNIST:
     import torch
     import torch.nn as nn
     from pyautoencoder.vanilla import AE
-    from pyautoencoder.loss import AELoss
 
     # Define encoder and decoder
     encoder = nn.Sequential(
@@ -57,13 +56,12 @@ Train a simple autoencoder on MNIST:
 
     # Training loop
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_fn = AELoss(likelihood='gaussian')
 
     x_batch = torch.randn(32, 1, 28, 28)
     output = model(x_batch)
-    loss_components = loss_fn(x_batch, output)
+    loss_results = model.compute_loss(x_batch, output, likelihood='bernoulli')
     optimizer.zero_grad()
-    loss_components.total.backward()
+    loss_results.objective.backward()
     optimizer.step()
 
     # Inference on z and x_hat (no gradients)
@@ -81,7 +79,6 @@ Train a VAE with the reparameterization trick:
     import torch
     import torch.nn as nn
     from pyautoencoder.variational import VAE
-    from pyautoencoder.loss import VAELoss
 
     # Define encoder and decoder
     encoder = nn.Sequential(
@@ -103,19 +100,13 @@ Train a VAE with the reparameterization trick:
 
     # Training loop
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_fn = VAELoss(beta=1.0, likelihood='gaussian')
 
     x_batch = torch.randn(32, 1, 28, 28)
     output = model(x_batch, S=1)  # S=1: single Monte Carlo sample
-    loss_components = loss_fn(x_batch, output)
+    loss_results = model.compute_loss(x_batch, output, beta=1, likelihood='bernoulli')
     optimizer.zero_grad()
-    loss_components.total.backward()
+    loss_results.objective.backward()
     optimizer.step()
-
-    # Print diagnostics
-    print(f"ELBO: {loss_components.metrics['elbo']:.4f}")
-    print(f"NLL/dim (bits): {loss_components.metrics['nll_per_dim_bits']:.4f}")
-    print(f"KL/latent-dim (nats): {loss_components.metrics['beta_kl_per_latent_dim_nats']:.4f}")
 
 Core Concepts
 -------------
@@ -132,14 +123,14 @@ All forward passes return structured output dataclasses that are easy to inspect
     # AEOutput(x_hat=Tensor(shape=(32, 1, 28, 28), dtype=torch.float32),
     #          z=Tensor(shape=(32, 64), dtype=torch.float32))
 
-Loss Components
+Loss Result
 ~~~~~~~~~~~~~~~
 
 Loss functions return structured results with optimization targets and diagnostics:
 
 .. code-block:: python
 
-    loss_components = loss_fn(x, model_output)
-    loss_components.total.backward()      # Optimize this
-    print(loss_components.metrics)        # Log these for monitoring
+    loss_results = loss_fn(x, model_output)
+    loss_results.objective.backward()      # Optimize this
+    print(loss_results.diagnostics)        # Log these for additional diagnostics 
 

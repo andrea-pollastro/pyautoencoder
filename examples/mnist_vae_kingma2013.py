@@ -2,8 +2,8 @@
 Reproduce the MNIST VAE experiment from Kingma & Welling (2013), Fig. 2.
 
 We train VAEs with different latent dimensionalities N_z and track the ELBO
-(negative variational free energy) as a function of the number of training
-samples seen. The setup follows the original paper:
+as a function of the number of training samples seen. 
+The setup follows the original paper:
 
 - One hidden layer MLPs with Tanh activations in encoder/decoder
 - Hidden size H = 500
@@ -31,7 +31,6 @@ from matplotlib.ticker import (
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from pyautoencoder.loss import VAELoss
 from pyautoencoder.variational import VAE
 
 
@@ -111,11 +110,9 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
     model.apply(init_weights_small_normal)
     return model
 
-loss_fn = VAELoss(likelihood="bernoulli")
-
 # ---------------- Evaluation ----------------- #
 @torch.no_grad()
-def average_elbo(dataloader: DataLoader, model: nn.Module) -> float:
+def average_elbo(dataloader: DataLoader, model: VAE) -> float:
     model.eval()
     total_elbo = 0.0
     n = 0
@@ -123,8 +120,8 @@ def average_elbo(dataloader: DataLoader, model: nn.Module) -> float:
     for x, _ in dataloader:
         x = x.to(DEVICE)
         out = model(x, S=MC_SAMPLES)
-        loss_info = loss_fn(x, out)
-        elbo_batch = -loss_info.total.item()  # ELBO ≈ - (negative ELBO)
+        loss_info = model.compute_loss(x, out, beta=1, likelihood='bernoulli')
+        elbo_batch = loss_info.diagnostics['elbo']
         batch_size = x.size(0)
         total_elbo += elbo_batch * batch_size
         n += batch_size
@@ -156,8 +153,8 @@ def train_one_setting(
             optimizer.zero_grad()
 
             out = model(x, S=MC_SAMPLES)
-            loss_info = loss_fn(x, out)
-            loss_info.total.backward()
+            loss_info = model.compute_loss(x, out, beta=1, likelihood='bernoulli')
+            loss_info.objective.backward()
             optimizer.step()
 
             batch_size = x.size(0)

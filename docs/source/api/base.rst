@@ -8,8 +8,3 @@ implementations.
    :members:
    :undoc-members:
    :show-inheritance:
-
-.. automodule:: pyautoencoder._base.base
-   :members:
-   :undoc-members:
-   :show-inheritance:
