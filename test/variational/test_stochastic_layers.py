@@ -1,6 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
+import math
 
 from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian 
 
@@ -201,3 +202,142 @@ def test_ffg_rejects_invalid_S_values():
     # S = -5 should raise
     with pytest.raises(ValueError, match="S must be >= 1"):
         head(x, S=-5)
+
+# ======================= FullyFactorizedGaussian.reparametrize =======================
+
+def test_reparametrize_shapes():
+    """Test that reparametrize returns correct shapes."""
+    B, Dz, S = 3, 5, 4
+    mu = torch.randn(B, Dz, requires_grad=True)
+    log_var = torch.randn(B, Dz, requires_grad=True)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    assert z.shape == (B, S, Dz)
+    assert z.requires_grad is True
+
+
+def test_reparametrize_deterministic_with_seed():
+    """Test that reparametrize is reproducible with same seed."""
+    B, Dz, S = 2, 3, 4
+    mu = torch.randn(B, Dz)
+    log_var = torch.randn(B, Dz)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    
+    torch.manual_seed(42)
+    z1 = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    torch.manual_seed(42)
+    z2 = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    assert torch.allclose(z1, z2)
+
+
+def test_reparametrize_stochastic_without_seed():
+    """Test that reparametrize produces different samples without seed."""
+    B, Dz, S = 2, 3, 10
+    mu = torch.randn(B, Dz)
+    log_var = torch.randn(B, Dz)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    
+    z1 = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    z2 = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    # With high probability (essentially always), different samples
+    assert not torch.allclose(z1, z2)
+
+
+def test_reparametrize_preserves_dtype():
+    """Test that reparametrize preserves dtype."""
+    B, Dz, S = 2, 3, 4
+    
+    # float32
+    mu32 = torch.randn(B, Dz, dtype=torch.float32)
+    log_var32 = torch.randn(B, Dz, dtype=torch.float32)
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z32 = head.reparametrize(mu=mu32, log_var=log_var32, S=S)
+    assert z32.dtype == torch.float32
+    
+    # float64
+    mu64 = torch.randn(B, Dz, dtype=torch.float64)
+    log_var64 = torch.randn(B, Dz, dtype=torch.float64)
+    z64 = head.reparametrize(mu=mu64, log_var=log_var64, S=S)
+    assert z64.dtype == torch.float64
+
+
+def test_reparametrize_mean_close_to_mu():
+    """Test that mean of samples is approximately mu (law of large numbers)."""
+    B, Dz, S = 2, 3, 10000
+    mu = torch.randn(B, Dz)
+    log_var = torch.zeros(B, Dz)  # std = 1 for easier checking
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    # Sample mean should be close to mu
+    z_mean = z.mean(dim=1)  # [B, Dz]
+    
+    assert torch.allclose(z_mean, mu, atol=0.05)
+
+
+def test_reparametrize_std_close_to_expected():
+    """Test that empirical std of samples is close to expected std."""
+    B, Dz, S = 2, 3, 10000
+    mu = torch.zeros(B, Dz)
+    expected_std = 2.0
+    log_var = torch.full((B, Dz), 2.0 * math.log(expected_std))  # std = 2.0
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    # Empirical std
+    z_std = z.std(dim=1)  # [B, Dz]
+    
+    # Should be close to expected_std
+    assert torch.allclose(z_std, torch.full_like(z_std, expected_std), atol=0.1)
+
+
+def test_reparametrize_backward():
+    """Test that gradients flow through reparametrize."""
+    B, Dz, S = 2, 3, 4
+    mu = torch.randn(B, Dz, requires_grad=True)
+    log_var = torch.randn(B, Dz, requires_grad=True)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    loss = z.sum()
+    loss.backward()
+    
+    assert mu.grad is not None
+    assert log_var.grad is not None
+    assert torch.any(mu.grad != 0)
+    assert torch.any(log_var.grad != 0)
+
+
+def test_reparametrize_with_s_equals_one():
+    """Test reparametrize with S=1."""
+    B, Dz = 3, 4
+    mu = torch.randn(B, Dz)
+    log_var = torch.randn(B, Dz)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=1)
+    
+    assert z.shape == (B, 1, Dz)
+
+
+def test_reparametrize_large_s():
+    """Test reparametrize with large S."""
+    B, Dz, S = 2, 3, 1000
+    mu = torch.randn(B, Dz)
+    log_var = torch.randn(B, Dz)
+    
+    head = FullyFactorizedGaussian(latent_dim=Dz)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    
+    assert z.shape == (B, S, Dz)
+    assert torch.isfinite(z).all()

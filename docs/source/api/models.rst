@@ -91,3 +91,13 @@ Variational Autoencoder
 .. autoclass:: pyautoencoder.variational.VAEOutput
    :members:
    :no-index:
+
+Adaptive Group Variational Autoencoder
+---------------------------------------
+
+.. autoclass:: pyautoencoder.variational.AdaGVAE
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: build, _encode, _decode
+   :special-members: __init__

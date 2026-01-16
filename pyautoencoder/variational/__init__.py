@@ -1,4 +1,5 @@
 from .vae import (
+    AdaGVAE,
     VAE,
     VAEDecodeOutput,
     VAEEncodeOutput,
@@ -6,6 +7,7 @@ from .vae import (
 )
 
 __all__ = [
+    'AdaGVAE',
     'VAE',
     'VAEDecodeOutput',
     'VAEEncodeOutput',

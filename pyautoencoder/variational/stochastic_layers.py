@@ -118,19 +118,23 @@ class FullyFactorizedGaussian(nn.Module):
         if S < 1:
             raise ValueError("S must be >= 1.")
 
-        mu = self.mu(x)            # type: ignore       # [B, Dz]
-        log_var = self.log_var(x)  # type: ignore       # [B, Dz]
+        mu = self.mu(x)            # type: ignore               # [B, Dz]
+        log_var = self.log_var(x)  # type: ignore               # [B, Dz]
 
         if self.training:
-            std = torch.exp(0.5 * log_var)              # [B, Dz]
-            mu_e  = mu.unsqueeze(1).expand(-1, S, -1)   # [B, S, Dz]
-            std_e = std.unsqueeze(1).expand(-1, S, -1)  # [B, S, Dz]
-            eps = torch.randn_like(std_e)
-            z = mu_e + std_e * eps                      # [B, S, Dz]
+            z = self.reparametrize(mu=mu, log_var=log_var, S=S) # [B, S, Dz]
         else:
-            z = mu.unsqueeze(1).expand(-1, S, -1)       # [B, S, Dz]
+            z = mu.unsqueeze(1).expand(-1, S, -1)               # [B, S, Dz]
 
         return z, mu, log_var
+    
+    def reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1):
+        std = torch.exp(0.5 * log_var)              # [B, Dz]
+        mu_e  = mu.unsqueeze(1).expand(-1, S, -1)   # [B, S, Dz]
+        std_e = std.unsqueeze(1).expand(-1, S, -1)  # [B, S, Dz]
+        eps = torch.randn_like(std_e)
+        z = mu_e + std_e * eps                      # [B, S, Dz]
+        return z
     
     @property
     def built(self) -> bool:

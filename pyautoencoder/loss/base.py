@@ -144,8 +144,8 @@ def kl_divergence_diag_gaussian(
     mu_q: torch.Tensor, 
     log_var_q: torch.Tensor, 
     mu_p: Optional[torch.Tensor] = None, 
-    log_var_p: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    log_var_p: Optional[torch.Tensor] = None,
+    reduce_sum: bool = True) -> torch.Tensor:
     r"""Compute the KL divergence :math:`\mathrm{KL}(q(z \mid x) \,\|\, p(z))`
     between two diagonal Gaussian distributions.
 
@@ -175,6 +175,8 @@ def kl_divergence_diag_gaussian(
         Mean of the second distribution ``[B, D_z]``. Defaults to 0.
     log_var_p : torch.Tensor, optional
         Log-variance of the second distribution ``[B, D_z]``. Defaults to 0.
+    reduce_sum: bool, optional
+        Sum over the dimensions. Default to True
 
     Returns
     -------
@@ -194,5 +196,6 @@ def kl_divergence_diag_gaussian(
     
     term1 = log_var_p - log_var_q
     term2 = (var_q + (mu_q - mu_p).pow(2)) / var_p
-    
-    return 0.5 * torch.sum(term1 + term2 - 1, dim=-1)
+    if reduce_sum:
+        return 0.5 * torch.sum(term1 + term2 - 1, dim=-1)
+    return 0.5 * (term1 + term2 - 1)

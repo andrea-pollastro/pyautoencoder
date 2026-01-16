@@ -39,6 +39,7 @@ PyAutoencoder is designed to offer **simple and easy access to autoencoder frame
 **Currently implemented**:
 - Autoencoder (AE)
 - Variational Autoencoder (VAE)
+- Adaptive Group Variational Autoencoder (Ada-GVAE)
 
 ---
 
