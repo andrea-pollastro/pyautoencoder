@@ -132,5 +132,3 @@ If you use this package in academic work, please cite:
 ## Acknowledgments
 
 This work was funded by the PNRR MUR project PE0000013-FAIR (CUP: E63C25000630006).
-
-This project is released under the **MIT License**. See [LICENSE](LICENSE).
