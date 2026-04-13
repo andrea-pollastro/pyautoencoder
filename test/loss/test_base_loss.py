@@ -7,44 +7,7 @@ from pyautoencoder.loss.base import (
     log_likelihood,
     kl_divergence_diag_gaussian,
     LikelihoodType,
-    _get_log2pi,
-    _LOG2PI_CACHE,
 )
-
-def test_get_log2pi_value_matches_math_log_2pi():
-    _LOG2PI_CACHE.clear()
-    x = torch.randn(2, 3, dtype=torch.float32)
-
-    log2pi = _get_log2pi(x)
-
-    assert log2pi.shape == ()  # scalar
-    assert log2pi.dtype == x.dtype
-    assert log2pi.device == x.device
-
-    expected = math.log(2.0 * math.pi)
-    assert torch.allclose(log2pi, torch.tensor(expected, dtype=x.dtype))
-
-def test_get_log2pi_caches_per_device_and_dtype():
-    _LOG2PI_CACHE.clear()
-
-    x32 = torch.randn(1, dtype=torch.float32)
-    x64 = torch.randn(1, dtype=torch.float64)
-
-    l32_first = _get_log2pi(x32)
-    l32_second = _get_log2pi(x32)
-    l64 = _get_log2pi(x64)
-
-    # Same (device, dtype) -> same tensor object (cached)
-    assert l32_first is l32_second
-
-    # Different dtype -> different cache entry
-    assert l32_first is not l64
-    assert l32_first.dtype == torch.float32
-    assert l64.dtype == torch.float64
-
-    # Cache keys are exactly the (device, dtype) pairs
-    assert (x32.device, x32.dtype) in _LOG2PI_CACHE
-    assert (x64.device, x64.dtype) in _LOG2PI_CACHE
 
 def test_log_likelihood_gaussian_scalar_matches_formula():
     # One scalar example, deterministic math
@@ -53,10 +16,10 @@ def test_log_likelihood_gaussian_scalar_matches_formula():
 
     out = log_likelihood(x, x_hat, likelihood=LikelihoodType.GAUSSIAN)
 
-    # manual formula: -0.5 * [ (x - x_hat)^2 + log(2*pi) ]
+    # manual formula: -0.5 * (x - x_hat)^2
     diff = float(x_hat - x)
     squared_error = diff * diff
-    expected = -0.5 * (squared_error + math.log(2.0 * math.pi))
+    expected = -0.5 * squared_error
 
     assert out.shape == ()
     assert torch.allclose(out, torch.tensor(expected, dtype=out.dtype))
@@ -71,9 +34,8 @@ def test_log_likelihood_gaussian_tensor_matches_elementwise_form():
 
     assert out.shape == x.shape
 
-    log2pi = _get_log2pi(x)
     squared_error = (x_hat - x) ** 2
-    expected = -0.5 * (squared_error + log2pi)
+    expected = -0.5 * squared_error
 
     assert torch.allclose(out, expected)
 
