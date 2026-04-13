@@ -137,7 +137,7 @@ Supported likelihoods:
   
   .. math::
   
-      \text{NLL} = \frac{1}{2}[(x-\hat{x})^2 + \log(2\pi)]
+      \text{NLL} = \frac{1}{2}(x-\hat{x})^2
 
 - **Bernoulli** – Discrete/binary data (logits)
 

@@ -82,7 +82,7 @@ def log_likelihood(x: torch.Tensor,
       .. math::
 
           \log p(x \mid \hat{x}) =
-              -\tfrac{1}{2} \left[ (x - \hat{x})^2 + \log(2\pi) \right].
+              -\tfrac{1}{2} (x - \hat{x})^2.
 
       The output has the same shape as ``x``. Summing over feature dimensions
       gives per-sample log-likelihoods.
@@ -134,8 +134,7 @@ def log_likelihood(x: torch.Tensor,
     
     elif likelihood == LikelihoodType.GAUSSIAN:
         squared_error = (x_hat - x) ** 2
-        log_2pi = _get_log2pi(x)
-        return -0.5 * (squared_error + log_2pi)
+        return -0.5 * squared_error
     
     else:
         raise ValueError(f"Unsupported likelihood: {likelihood}")
