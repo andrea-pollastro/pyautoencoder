@@ -1,4 +1,3 @@
-import math
 import torch
 import torch.nn.functional as F
 from dataclasses import dataclass
@@ -19,9 +18,6 @@ class LikelihoodType(Enum):
 
     GAUSSIAN = 'gaussian'
     BERNOULLI = 'bernoulli'
-
-# Cache for log(2pi) constants per (device, dtype)
-_LOG2PI_CACHE = {}
 
 @dataclass(slots=True, repr=True)
 class LossResult:
@@ -44,30 +40,6 @@ class LossResult:
 
     objective: torch.Tensor
     diagnostics: Dict[str, float]
-
-def _get_log2pi(x: torch.Tensor) -> torch.Tensor:
-    r"""Return a cached value of :math:`\log(2\pi)` for the given device and dtype.
-
-    This avoids repeatedly allocating the constant for different devices or
-    precisions. A separate tensor is cached for each ``(device, dtype)`` pair.
-
-    Parameters
-    ----------
-    x : torch.Tensor
-        A tensor whose ``device`` and ``dtype`` determine which cached value is
-        returned or created.
-
-    Returns
-    -------
-    torch.Tensor
-        A scalar tensor equal to :math:`\log(2\pi)` with the same device and
-        dtype as ``x``.
-    """
-
-    key = (x.device, x.dtype)
-    if key not in _LOG2PI_CACHE:
-        _LOG2PI_CACHE[key] = torch.tensor(2.0 * math.pi, device=x.device, dtype=x.dtype).log()
-    return _LOG2PI_CACHE[key]
 
 def log_likelihood(x: torch.Tensor, 
                    x_hat: torch.Tensor, 
@@ -118,9 +90,9 @@ def log_likelihood(x: torch.Tensor,
 
     Notes
     -----
-    - The Gaussian case includes the normalization constant
-      :math:`\log(2\pi)`, cached per ``(device, dtype)`` with
-      :func:`_get_log2pi`.
+    - The Gaussian case omits the normalization constant
+      :math:`-\tfrac{1}{2}\log(2\pi)`, which is constant with respect to
+      the model parameters and has no effect on optimization.
     - The Bernoulli case is fully numerically stable because it operates
       directly in log-space.
     """

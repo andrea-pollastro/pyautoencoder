@@ -247,8 +247,8 @@ def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
     assert isinstance(loss_result.diagnostics['log_likelihood'], float)
 
 
-def test_ae_compute_loss_gaussian_likelihood_is_nonnegative():
-    """Test that NLL (objective) is non-negative for Gaussian likelihood."""
+def test_ae_compute_loss_gaussian_nll_equals_half_mse():
+    """Test that the Gaussian NLL objective equals 0.5 * mean MSE."""
     batch_size = 5
     in_features = 6
     latent_features = 2
@@ -265,12 +265,15 @@ def test_ae_compute_loss_gaussian_likelihood_is_nonnegative():
 
     loss_result = ae.compute_loss(x, ae_output, likelihood='gaussian')
 
-    # NLL should be non-negative (it's -log_likelihood)
-    assert loss_result.objective.item() >= 0
+    # Gaussian NLL (without normalization constant) == 0.5 * per-sample MSE, batch-averaged
+    expected = 0.5 * ((ae_output.x_hat - x) ** 2).reshape(batch_size, -1).sum(-1).mean()
+    assert torch.allclose(loss_result.objective, expected, atol=1e-6)
 
 
-def test_ae_compute_loss_bernoulli_likelihood():
-    """Test compute_loss with Bernoulli likelihood."""
+def test_ae_compute_loss_bernoulli_nll_equals_bce():
+    """Bernoulli NLL equals sum-over-features BCE, batch-averaged."""
+    import torch.nn.functional as F
+
     batch_size = 4
     in_features = 8
     latent_features = 3
@@ -279,7 +282,7 @@ def test_ae_compute_loss_bernoulli_likelihood():
     decoder = SimpleDecoder(latent_features=latent_features, out_features=in_features)
     ae = AE(encoder=encoder, decoder=decoder)
 
-    x = torch.sigmoid(torch.randn(batch_size, in_features))  # Bernoulli needs [0, 1]
+    x = torch.sigmoid(torch.randn(batch_size, in_features))  # targets in [0, 1]
     ae.build(x)
 
     torch.set_grad_enabled(True)
@@ -287,16 +290,18 @@ def test_ae_compute_loss_bernoulli_likelihood():
 
     loss_result = ae.compute_loss(x, ae_output, likelihood='bernoulli')
 
-    # Check return structure
-    from pyautoencoder.loss.base import LossResult
-    assert isinstance(loss_result, LossResult)
+    # NLL = mean over batch of (sum over features of BCE)
+    expected = F.binary_cross_entropy_with_logits(
+        ae_output.x_hat, x, reduction='none'
+    ).reshape(batch_size, -1).sum(-1).mean()
+
     assert loss_result.objective.dim() == 0
+    assert torch.allclose(loss_result.objective, expected, atol=1e-6)
     assert 'log_likelihood' in loss_result.diagnostics
-    assert loss_result.objective.item() >= 0
 
 
-def test_ae_compute_loss_backward_flows_through_x_hat():
-    """Test that gradients flow properly through the loss."""
+def test_ae_compute_loss_backward_flows_through_all_params():
+    """Test that gradients flow through both encoder and decoder."""
     batch_size = 2
     in_features = 4
     latent_features = 2
@@ -314,8 +319,9 @@ def test_ae_compute_loss_backward_flows_through_x_hat():
     loss_result = ae.compute_loss(x, ae_output)
     loss_result.objective.backward()
 
-    # Check that decoder params have gradients
+    enc_grads = [p.grad for p in encoder.parameters() if p.requires_grad]
     dec_grads = [p.grad for p in decoder.parameters() if p.requires_grad]
+    assert any(g is not None and torch.any(g != 0) for g in enc_grads)
     assert any(g is not None and torch.any(g != 0) for g in dec_grads)
 
 

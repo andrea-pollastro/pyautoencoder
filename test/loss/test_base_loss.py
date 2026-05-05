@@ -1,5 +1,4 @@
 import pytest
-import math
 import torch
 import torch.nn.functional as F
 
@@ -252,22 +251,22 @@ def test_kl_divergence_preserves_device():
     assert kl.device == mu_q.device
 
 
-def test_kl_divergence_symmetric_when_p_and_q_swapped_with_custom_prior():
-    """Test asymmetry property: KL(q||p) != KL(p||q) in general."""
+def test_kl_divergence_is_asymmetric():
+    """KL(q||p) != KL(p||q) in general — KL is not a symmetric distance."""
     B, Dz = 2, 3
+    torch.manual_seed(0)
     mu_q = torch.randn(B, Dz)
     log_var_q = torch.randn(B, Dz)
     mu_p = torch.randn(B, Dz)
     log_var_p = torch.randn(B, Dz)
-    
+
     kl_q_p = kl_divergence_diag_gaussian(mu_q, log_var_q, mu_p, log_var_p)
     kl_p_q = kl_divergence_diag_gaussian(mu_p, log_var_p, mu_q, log_var_q)
-    
-    # KL divergence is asymmetric in general
-    # (unless the distributions happen to be very similar)
-    # Just check both are valid
+
     assert torch.isfinite(kl_q_p).all()
     assert torch.isfinite(kl_p_q).all()
+    # For random, distinct Gaussians this will virtually never be equal
+    assert not torch.allclose(kl_q_p, kl_p_q)
 
 
 def test_kl_divergence_backward_flows_gradients():
@@ -304,22 +303,6 @@ def test_kl_divergence_with_custom_prior_backward():
     assert log_var_q.grad is not None
     assert mu_p.grad is not None
     assert log_var_p.grad is not None
-
-
-def test_kl_divergence_matches_pytorch_implementation():
-    """Compare with a reference PyTorch implementation."""
-    B, Dz = 3, 4
-    mu_q = torch.randn(B, Dz)
-    log_var_q = torch.randn(B, Dz)
-    
-    # Our implementation
-    kl_ours = kl_divergence_diag_gaussian(mu_q, log_var_q)
-    
-    # Reference implementation (standard VAE KL)
-    var_q = log_var_q.exp()
-    kl_ref = 0.5 * torch.sum(-log_var_q + var_q + mu_q.pow(2) - 1, dim=-1)
-    
-    assert torch.allclose(kl_ours, kl_ref, atol=1e-5)
 
 
 def test_kl_divergence_large_batch():

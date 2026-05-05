@@ -156,7 +156,7 @@ class BuildGuardMixin(ABC):
             @wraps(_orig_build)
             def _wrapped_build(self, *args: Any, **kwargs: Any) -> None:
 
-                if getattr(self, "_built", True):
+                if getattr(self, "_built", False):
                     return
 
                 with torch.no_grad():

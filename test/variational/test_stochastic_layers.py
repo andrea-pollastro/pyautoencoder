@@ -87,6 +87,23 @@ def test_ffg_build_can_be_called_twice_with_same_feature_dim():
     assert isinstance(head.mu, nn.Linear)
     assert head.mu.in_features == F
 
+
+def test_ffg_build_replaces_layers_on_different_feature_dim():
+    """Rebuilding with a different F must replace mu and log_var layers."""
+    latent_dim = 3
+    head = FullyFactorizedGaussian(latent_dim=latent_dim)
+
+    head.build(torch.randn(2, 5))
+    assert head.in_features == 5
+    assert isinstance(head.mu, nn.Linear) and head.mu.in_features == 5
+    assert isinstance(head.log_var, nn.Linear) and head.log_var.in_features == 5
+
+    head.build(torch.randn(2, 8))
+    assert head.in_features == 8
+    assert isinstance(head.mu, nn.Linear) and head.mu.in_features == 8
+    assert isinstance(head.log_var, nn.Linear) and head.log_var.in_features == 8
+    assert head.built is True
+
 def test_ffg_forward_raises_if_not_built():
     head = FullyFactorizedGaussian(latent_dim=3)
     x = torch.randn(2, 5)
@@ -178,6 +195,8 @@ def test_ffg_eval_forward_respects_default_S_equals_1():
     z, mu, log_var = head(x)  # S default = 1
 
     assert z.shape == (B, 1, Dz)
+    assert mu.shape == (B, Dz)
+    assert log_var.shape == (B, Dz)
     expected_z = mu.unsqueeze(1)  # [B, 1, Dz]
     assert torch.allclose(z, expected_z)
 

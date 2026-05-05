@@ -62,7 +62,7 @@ class FullyFactorizedGaussian(nn.Module):
             raise TypeError("build(x) expects a torch.Tensor.")
         if input_sample.ndim != 2:
             raise ValueError(f"build(x): expected shape [B, F], got {tuple(input_sample.shape)}. Flatten upstream.")
-        if input_sample.shape[1] <= 0:
+        if input_sample.shape[1] == 0:
             raise ValueError("build(x): F (feature dimension) must be > 0.")
         
         in_features = int(input_sample.shape[1])
@@ -128,7 +128,28 @@ class FullyFactorizedGaussian(nn.Module):
 
         return z, mu, log_var
     
-    def reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1):
+    def reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1) -> torch.Tensor:
+        r"""Draw ``S`` latent samples via the reparameterization trick.
+
+        .. math::
+
+            z^{(s)} = \mu + \sigma \odot \epsilon^{(s)},
+            \qquad \epsilon^{(s)} \sim \mathcal{N}(0, I).
+
+        Parameters
+        ----------
+        mu : torch.Tensor
+            Mean of the posterior, shape ``[B, D_z]``.
+        log_var : torch.Tensor
+            Log-variance of the posterior, shape ``[B, D_z]``.
+        S : int, optional
+            Number of samples to draw. Defaults to ``1``.
+
+        Returns
+        -------
+        torch.Tensor
+            Sampled latent codes of shape ``[B, S, D_z]``.
+        """
         std = torch.exp(0.5 * log_var)              # [B, Dz]
         mu_e  = mu.unsqueeze(1).expand(-1, S, -1)   # [B, S, Dz]
         std_e = std.unsqueeze(1).expand(-1, S, -1)  # [B, S, Dz]

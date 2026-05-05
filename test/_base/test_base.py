@@ -14,7 +14,6 @@ from pyautoencoder._base.base import (
 # ================= ModelOutput =================
 
 def test_model_output_repr_tensors_and_non_tensors():
-    @torch.no_grad()
     @dataclass(slots=True, repr=False)
     class MyOutput(ModelOutput):
         logits: torch.Tensor

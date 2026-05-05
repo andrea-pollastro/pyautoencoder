@@ -322,10 +322,13 @@ class VAE(BaseAutoencoder):
 class AdaGVAE(VAE):
     r"""Adaptive Group Variational Autoencoder (Ada-GVAE), from Locatello et al. (2020).
 
-    This class extends the VAE class and enables feature disentanglement in the latent space. 
-    For inference, use the .encode() and .decode() methods, as the forward method expects pairs of images, 
-    following the formulation introduced by Locatello et al.
+    This class extends the VAE class and enables feature disentanglement in the latent space.
+    Use :meth:`forward_pair` for the paired training pass and :meth:`compute_pair_loss` for
+    its loss. The inherited :meth:`encode` / :meth:`decode` methods work normally for inference
+    on single inputs.
     """
+
+    _GUARDED = VAE._GUARDED | {"_encode_pair"}
 
     def __init__(
         self,
@@ -418,7 +421,7 @@ class AdaGVAE(VAE):
                VAEEncodeOutput(z=z2, mu=mu_tilde2, log_var=log_var_tilde2)
 
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> Tuple[VAEOutput, VAEOutput]:
+    def forward_pair(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> Tuple[VAEOutput, VAEOutput]:
         """Full AdaGVAE forward pass: encode pairs with adaptive grouping, sample, and decode.
 
         Parameters
@@ -445,14 +448,14 @@ class AdaGVAE(VAE):
         x2_dec = self._decode(x2_enc.z)
         return VAEOutput(x_hat=x1_dec.x_hat, z=x1_enc.z, mu=x1_enc.mu, log_var=x1_enc.log_var), \
                VAEOutput(x_hat=x2_dec.x_hat, z=x2_enc.z, mu=x2_enc.mu, log_var=x2_enc.log_var)
-    
-    def compute_loss(self,
-                     x1: torch.Tensor, 
-                     x1_vae_output: VAEOutput,
-                     x2: torch.Tensor, 
-                     x2_vae_output: VAEOutput,
-                     beta: float = 1,
-                     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
+
+    def compute_pair_loss(self,
+                          x1: torch.Tensor,
+                          x1_vae_output: VAEOutput,
+                          x2: torch.Tensor,
+                          x2_vae_output: VAEOutput,
+                          beta: float = 1,
+                          likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute the combined ELBO for a pair of inputs with adaptive posteriors.
 
         This method computes the sum of the standard VAE ELBOs for both inputs:
