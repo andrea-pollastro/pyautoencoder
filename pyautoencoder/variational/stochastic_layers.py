@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from typing import Optional
 from .._base.base import NotBuiltError
 
 class FullyFactorizedGaussian(nn.Module):
@@ -28,8 +27,8 @@ class FullyFactorizedGaussian(nn.Module):
     def __init__(self, latent_dim: int):
         super().__init__()
         self.latent_dim = latent_dim
-        self.mu: Optional[nn.Linear] = None
-        self.log_var: Optional[nn.Linear] = None
+        self.mu: nn.Linear | None = None
+        self.log_var: nn.Linear | None = None
         self._built = False
 
     def build(self, input_sample: torch.Tensor) -> None:
@@ -74,7 +73,30 @@ class FullyFactorizedGaussian(nn.Module):
         self.in_features = in_features
         self._built = True
 
-    def forward(self, x: torch.Tensor, S: int = 1):
+    def get_params(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        r"""Compute posterior parameters without drawing samples.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape ``[B, F]``.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            ``(mu, log_var)``, each of shape ``[B, latent_dim]``.
+
+        Raises
+        ------
+        NotBuiltError
+            If the module has not been built.
+        """
+
+        if not self._built:
+            raise NotBuiltError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
+        return self.mu(x), self.log_var(x)  # type: ignore
+
+    def forward(self, x: torch.Tensor, S: int = 1) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""Compute parameters and (optionally) samples from the Gaussian posterior.
 
         During training, this method returns ``S`` Monte Carlo samples using the
@@ -98,7 +120,7 @@ class FullyFactorizedGaussian(nn.Module):
 
         Returns
         -------
-        tuple
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             ``(z, mu, log_var)``, where:
 
             * ``z`` – sampled or repeated latent codes, shape ``[B, S, latent_dim]``.
@@ -122,13 +144,13 @@ class FullyFactorizedGaussian(nn.Module):
         log_var = self.log_var(x)  # type: ignore               # [B, Dz]
 
         if self.training:
-            z = self.reparametrize(mu=mu, log_var=log_var, S=S) # [B, S, Dz]
+            z = self._reparametrize(mu=mu, log_var=log_var, S=S) # [B, S, Dz]
         else:
             z = mu.unsqueeze(1).expand(-1, S, -1)               # [B, S, Dz]
 
         return z, mu, log_var
     
-    def reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1) -> torch.Tensor:
+    def _reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1) -> torch.Tensor:
         r"""Draw ``S`` latent samples via the reparameterization trick.
 
         .. math::

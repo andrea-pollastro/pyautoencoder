@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from dataclasses import dataclass
-from typing import Union, Optional, Dict
 from enum import Enum
 
 class LikelihoodType(Enum):
@@ -39,11 +38,11 @@ class LossResult:
     """
 
     objective: torch.Tensor
-    diagnostics: Dict[str, float]
+    diagnostics: dict[str, float]
 
 def log_likelihood(x: torch.Tensor, 
                    x_hat: torch.Tensor, 
-                   likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> torch.Tensor:
+                   likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> torch.Tensor:
     r"""Compute the elementwise log-likelihood :math:`\log p(x \mid \hat{x})`.
 
     Two likelihood models are supported.
@@ -78,7 +77,7 @@ def log_likelihood(x: torch.Tensor,
         Ground-truth tensor.
     x_hat : torch.Tensor
         Reconstructed tensor. For the Bernoulli case, values are logits.
-    likelihood : Union[str, LikelihoodType], optional
+    likelihood : str | LikelihoodType, optional
         Likelihood model to use. May be a string (``"gaussian"``,
         ``"bernoulli"``) or a :class:`LikelihoodType` enum value.
         Defaults to Gaussian.
@@ -97,7 +96,6 @@ def log_likelihood(x: torch.Tensor,
       directly in log-space.
     """
 
-
     if isinstance(likelihood, str):
         likelihood = LikelihoodType(likelihood.lower())
     
@@ -114,8 +112,8 @@ def log_likelihood(x: torch.Tensor,
 def kl_divergence_diag_gaussian(
     mu_q: torch.Tensor, 
     log_var_q: torch.Tensor, 
-    mu_p: Optional[torch.Tensor] = None, 
-    log_var_p: Optional[torch.Tensor] = None,
+    mu_p: torch.Tensor | None = None,
+    log_var_p: torch.Tensor | None = None,
     reduce_sum: bool = True) -> torch.Tensor:
     r"""Compute the KL divergence :math:`\mathrm{KL}(q(z \mid x) \,\|\, p(z))`
     between two diagonal Gaussian distributions.
@@ -142,31 +140,34 @@ def kl_divergence_diag_gaussian(
         Mean of the first distribution ``[B, D_z]``.
     log_var_q : torch.Tensor
         Log-variance of the first distribution ``[B, D_z]``.
-    mu_p : torch.Tensor, optional
+    mu_p : torch.Tensor or None, optional
         Mean of the second distribution ``[B, D_z]``. Defaults to 0.
-    log_var_p : torch.Tensor, optional
+    log_var_p : torch.Tensor or None, optional
         Log-variance of the second distribution ``[B, D_z]``. Defaults to 0.
     reduce_sum: bool, optional
-        Sum over the dimensions. Default to True
+        Sum over the dimensions. Defaults to ``True``.
 
     Returns
     -------
     torch.Tensor
-        Per-sample KL divergences of shape [B].
+        KL divergences of shape ``[B]`` when ``reduce_sum=True``, or
+        ``[B, D_z]`` when ``reduce_sum=False``.
     """
     
-    # Se p non è specificata, assumiamo N(0, I)
+    if mu_p is None and log_var_p is None:
+        # Closed form for KL(N(mu_q, exp(log_var_q)) || N(0, I)) — avoids allocating zero tensors.
+        kl = 0.5 * (log_var_q.exp() + mu_q.pow(2) - 1 - log_var_q)
+        return kl.sum(dim=-1) if reduce_sum else kl
+
     if mu_p is None:
         mu_p = torch.zeros_like(mu_q)
     if log_var_p is None:
         log_var_p = torch.zeros_like(log_var_q)
 
-    # Calcolo dei termini
     var_q = log_var_q.exp()
     var_p = log_var_p.exp()
-    
+
     term1 = log_var_p - log_var_q
     term2 = (var_q + (mu_q - mu_p).pow(2)) / var_p
-    if reduce_sum:
-        return 0.5 * torch.sum(term1 + term2 - 1, dim=-1)
-    return 0.5 * (term1 + term2 - 1)
+    kl = 0.5 * (term1 + term2 - 1)
+    return kl.sum(dim=-1) if reduce_sum else kl

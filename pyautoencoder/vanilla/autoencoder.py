@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-from typing import Union, Dict
-
 from .._base.base import BaseAutoencoder, ModelOutput
 from ..loss.base import log_likelihood, LikelihoodType, LossResult
 
@@ -146,7 +144,7 @@ class AE(BaseAutoencoder):
     def compute_loss(self, 
                      x: torch.Tensor,
                      ae_output: AEOutput,
-                     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
+                     likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute Autoencoder reconstruction loss.
 
         The scalar loss is the batch-mean reconstruction negative log-likelihood (NLL).
@@ -162,7 +160,7 @@ class AE(BaseAutoencoder):
             - ``x_hat`` (torch.Tensor): Reconstructions, shape ``[B, ...]``.
             - ``z`` (torch.Tensor): Latent representation (unused by this method).
 
-        likelihood : Union[str, LikelihoodType], optional
+        likelihood : str | LikelihoodType, optional
             Likelihood model for computing the reconstruction term.
             Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
 

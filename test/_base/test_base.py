@@ -107,38 +107,38 @@ def test_guarded_method_raises_before_build_and_works_after_build():
     assert m.extra() == "ok"
 
 
-def test_guarded_method_swaps_to_original_after_first_successful_call():
-    class SwapModel(BuildGuardMixin):
+def test_guard_checks_built_on_every_call():
+    """The guard is not swapped out after the first call — _built is checked every time."""
+    class M(BuildGuardMixin):
         _GUARDED = ("forward",)
 
         def __init__(self):
             super().__init__()
-            self.build_calls = 0
             self.forward_calls = 0
 
         def build(self, x):
-            self.build_calls += 1
             self._built = True
 
         def forward(self, x):
             self.forward_calls += 1
             return x + 1
 
-    m = SwapModel()
+    m = M()
     x = torch.tensor([1.0])
-
-    # building
     m.build(x)
-    assert m.build_calls == 1
 
     out1 = m.forward(x)
     assert torch.equal(out1, x + 1)
     assert m.forward_calls == 1
 
-    # After the first successful call, the instance should have a direct bound method
-    # (i.e., the guard is no longer invoked).
-    # To test that, toggling `_built` back to False should not break subsequent calls.
-    m._built = False  # would fail if guard were still in place
+    # Resetting _built must re-enable the guard on subsequent calls.
+    m._built = False
+    with pytest.raises(NotBuiltError):
+        m.forward(x)
+    assert m.forward_calls == 1  # forward body was not reached
+
+    # Re-building restores normal operation.
+    m.build(x)
     out2 = m.forward(x)
     assert torch.equal(out2, x + 1)
     assert m.forward_calls == 2
@@ -196,7 +196,8 @@ def test_build_is_no_op_if_already_built():
 
 
 def test_missing_guarded_class_attribute_raises_type_error():
-    # __init_subclass__ runs at class creation time, so we have to define it inside the with block
+    # __init_subclass__ runs at class creation time; the error is raised immediately.
+    # _GUARDED is required only when no ancestor defines it (i.e. the root of the hierarchy).
     with pytest.raises(TypeError, match="must define a class attribute `_GUARDED`"):
         class NoGuard(BuildGuardMixin):
             def forward(self, x):
@@ -274,7 +275,8 @@ def test_inheritance_keeps_guard_behavior_for_inherited_methods():
     assert torch.equal(out, torch.tensor([12.0]))
 
 
-def test_child_can_extend_guarded_set_and_add_new_guarded_method():
+def test_child_only_declares_new_guards_parent_guards_auto_accumulated():
+    """Subclasses only list new methods in _GUARDED; parent guards are merged automatically."""
     class Parent(BuildGuardMixin):
         _GUARDED = {"forward"}
 
@@ -288,26 +290,51 @@ def test_child_can_extend_guarded_set_and_add_new_guarded_method():
             return x * 2
 
     class Child(Parent):
-        _GUARDED = Parent._GUARDED.union({"extra"})  # extend guarded methods
+        _GUARDED = {"extra"}  # only the new method — parent's {"forward"} is auto-merged
 
         def extra(self, x):
             return x * 3
 
-    # After class creation, Child._GUARDED should be a set containing both
     assert Child._GUARDED == {"forward", "extra"}
 
     m = Child()
 
-    # Both methods should be guarded
     with pytest.raises(NotBuiltError):
         m.forward(torch.tensor([1.0]))
     with pytest.raises(NotBuiltError):
         m.extra(torch.tensor([1.0]))
 
-    # After build, both should work
     m.build(torch.tensor([1.0]))
     assert torch.equal(m.forward(torch.tensor([2.0])), torch.tensor([4.0]))
     assert torch.equal(m.extra(torch.tensor([2.0])), torch.tensor([6.0]))
+
+
+def test_child_override_of_parent_guarded_method_is_also_guarded():
+    """If a child overrides a method that was guarded in the parent, the override is guarded too."""
+    class Parent(BuildGuardMixin):
+        _GUARDED = {"forward"}
+
+        def __init__(self):
+            super().__init__()
+
+        def build(self, x):
+            self._built = True
+
+        def forward(self, x):
+            return x * 2
+
+    class Child(Parent):
+        # No new guards — just overrides forward
+        def forward(self, x):
+            return x * 10
+
+    m = Child()
+
+    with pytest.raises(NotBuiltError):
+        m.forward(torch.tensor([1.0]))
+
+    m.build(torch.tensor([1.0]))
+    assert torch.equal(m.forward(torch.tensor([3.0])), torch.tensor([30.0]))
 
 def test_guarded_method_preserves_function_metadata():
     class M(BuildGuardMixin):
@@ -342,17 +369,19 @@ def test_guarded_missing_methods_are_safely_ignored():
     assert not hasattr(m, "imaginary_method")
 
 
-def test_guard_method_returning_none_still_replaces_itself():
+def test_guard_fires_after_built_reset_even_for_none_returning_methods():
     class M(BuildGuardMixin):
-        _GUARDED=("f",)
-        def build(self,x): self._built=True
+        _GUARDED = ("f",)
+        def build(self, x): self._built = True
         def f(self): return None
 
-    m=M()
+    m = M()
     m.build(None)
-    assert m.f() is None   # should not raise, and should replace guard
-    m._built=False
-    assert m.f() is None   # guard removed
+    assert m.f() is None  # works post-build
+
+    m._built = False
+    with pytest.raises(NotBuiltError):
+        m.f()  # guard is still active
 
 # ================= BaseAutoencoder =================
 
@@ -419,10 +448,10 @@ class ToyAutoencoder(BaseAutoencoder):
         x_hat = self.decoder(z)
         return AEForwardOutput(z=z, x_hat=x_hat)
 
-    def compute_loss(self, x: torch.Tensor, model_output: ModelOutput, *args, **kwargs):
+    def compute_loss(self, x: torch.Tensor, output: ModelOutput, *args, **kwargs):
         """Dummy loss function for testing."""
         # Simple dummy loss: mean squared error between input and reconstruction
-        x_hat = model_output.x_hat  # type: ignore
+        x_hat = output.x_hat  # type: ignore
         mse = ((x - x_hat) ** 2).mean()
         from pyautoencoder.loss.base import LossResult
         return LossResult(

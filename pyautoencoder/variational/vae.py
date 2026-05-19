@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-from typing import Union, Tuple
-
 from ..loss.base import (
     LikelihoodType, 
     log_likelihood, 
@@ -87,14 +85,7 @@ class VAE(BaseAutoencoder):
         Notes
         -----
         A sampling layer is internally created using a fully factorized Gaussian
-        (`FullyFactorizedGaussian`). At the moment this sampling layer is not
-        configurable from the outside: it is fixed and not exposed as an argument
-        to the constructor.
-
-        In a future revision, the sampling layer will become a user-selectable
-        component, allowing different reparameterization modules to be passed in.
-        The VAE will then choose the appropriate sampling strategy based on a
-        constructor parameter.
+        (``FullyFactorizedGaussian``). It is fixed and not configurable from the outside.
 
         Parameters
         ----------
@@ -184,11 +175,10 @@ class VAE(BaseAutoencoder):
         the decoder must output logits.
         """
         
-        enc = self._encode(x, S=S) # VAEEncodeOutput(z, mu, log_var)
-        dec = self._decode(enc.z)  # VAEDecodeOutput(x_hat)
+        enc = self._encode(x, S=S)
+        dec = self._decode(enc.z)
         return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)
     
-    @torch.no_grad()
     def build(self, input_sample: torch.Tensor) -> None:
         """Build the VAE using a representative input sample.
 
@@ -204,14 +194,15 @@ class VAE(BaseAutoencoder):
 
         f = self.encoder(input_sample)
         self.sampling_layer.build(f)
-        assert self.sampling_layer.built, 'Sampling layer building failed.'
+        if not self.sampling_layer.built:
+            raise RuntimeError("Sampling layer building failed.")
         self._built = True
 
     def compute_loss(self,
                      x: torch.Tensor, 
                      vae_output: VAEOutput,
                      beta: float = 1,
-                     likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
+                     likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute the Evidence Lower Bound (ELBO) for a (beta-)Variational Autoencoder.
 
         This method implements the beta-VAE objective:
@@ -254,7 +245,7 @@ class VAE(BaseAutoencoder):
             - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``.
             - ``log_var`` (torch.Tensor): Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
 
-        likelihood : Union[str, LikelihoodType], optional
+        likelihood : str | LikelihoodType, optional
             Likelihood model for the reconstruction term. 
             Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
         beta : float, optional
@@ -319,43 +310,39 @@ class VAE(BaseAutoencoder):
             }
         )
 
+@dataclass(slots=True, repr=False)
+class AdaGVAEOutput(ModelOutput):
+    r"""Output of a full AdaGVAE paired forward pass.
+
+    Attributes
+    ----------
+    output1 : VAEOutput
+        VAE output for the first input of the pair, with adapted posterior.
+    output2 : VAEOutput
+        VAE output for the second input of the pair, with adapted posterior.
+    """
+
+    output1: VAEOutput
+    output2: VAEOutput
+
 class AdaGVAE(VAE):
     r"""Adaptive Group Variational Autoencoder (Ada-GVAE), from Locatello et al. (2020).
 
-    This class extends the VAE class and enables feature disentanglement in the latent space.
-    Use :meth:`forward_pair` for the paired training pass and :meth:`compute_pair_loss` for
-    its loss. The inherited :meth:`encode` / :meth:`decode` methods work normally for inference
-    on single inputs.
+    This class extends :class:`VAE` and enables feature disentanglement in the latent space
+    through adaptive posterior grouping.
+
+    During training, :meth:`forward` expects a pair of inputs ``(x1, x2)`` and returns an
+    :class:`AdaGVAEOutput` containing the adapted latent representations for both.
+    After training, :meth:`forward` operates on single images exactly like a standard VAE,
+    returning a :class:`VAEOutput`.
+
+    :meth:`compute_loss` mirrors this: when given an :class:`AdaGVAEOutput` it computes the
+    combined pair ELBO; when given a :class:`VAEOutput` it falls back to the standard ELBO.
     """
 
-    _GUARDED = VAE._GUARDED | {"_encode_pair"}
+    _GUARDED = {"_encode_pair"}
 
-    def __init__(
-        self,
-        encoder: nn.Module,
-        decoder: nn.Module,
-        latent_dim: int,
-    ):
-        """Construct an AdaGVAE from an encoder, decoder, and latent size.
-
-        Notes
-        -----
-        The encoder and decoder are identical to those in a standard VAE. The adaptive
-        grouping mechanism is applied during the encoding step when processing paired inputs.
-
-        Parameters
-        ----------
-        encoder : nn.Module
-            Maps input ``x`` to a feature vector ``f(x)`` with shape ``[B, F]``.
-        decoder : nn.Module
-            Maps latent samples ``z`` to reconstructions ``x_hat``.
-        latent_dim : int
-            Dimensionality ``D_z`` of the latent space.
-        """
-        super().__init__(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
-
-    # --- training-time hooks required by BaseAutoencoder ---
-    def _encode_pair(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> Tuple[VAEEncodeOutput, VAEEncodeOutput]:
+    def _encode_pair(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> tuple[VAEEncodeOutput, VAEEncodeOutput]:
         r"""Encode a pair of inputs with adaptive posterior alignment.
 
         As described in Locatello et al., this method:
@@ -379,7 +366,7 @@ class AdaGVAE(VAE):
 
         Returns
         -------
-        Tuple[VAEEncodeOutput, VAEEncodeOutput]
+        tuple[VAEEncodeOutput, VAEEncodeOutput]
             A pair of ``VAEEncodeOutput`` objects, each containing:
 
             - ``z`` of shape ``[B, S, D_z]``: samples from the adapted posteriors.
@@ -392,8 +379,8 @@ class AdaGVAE(VAE):
         while allowing independent variation for high-divergence dimensions. 
         This encourages disentanglement and structured representations.
         """
-        _, mu1, log_var1 = self.sampling_layer(self.encoder(x1))
-        _, mu2, log_var2 = self.sampling_layer(self.encoder(x2))
+        mu1, log_var1 = self.sampling_layer.get_params(self.encoder(x1))
+        mu2, log_var2 = self.sampling_layer.get_params(self.encoder(x2))
 
         # KL(q1||q2) -> [B, latents]
         kl_q1_q2 = kl_divergence_diag_gaussian(mu1, log_var1, mu2, log_var2, reduce_sum=False)
@@ -414,51 +401,49 @@ class AdaGVAE(VAE):
         log_var_tilde1 = torch.where(mask, log_var_mean, log_var1)
         log_var_tilde2 = torch.where(mask, log_var_mean, log_var2)
 
-        z1 = self.sampling_layer.reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
-        z2 = self.sampling_layer.reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
+        z1 = self.sampling_layer._reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
+        z2 = self.sampling_layer._reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
 
-        return VAEEncodeOutput(z=z1, mu=mu_tilde1, log_var=log_var_tilde1), \
-               VAEEncodeOutput(z=z2, mu=mu_tilde2, log_var=log_var_tilde2)
+        return (
+            VAEEncodeOutput(z=z1, mu=mu_tilde1, log_var=log_var_tilde1),
+            VAEEncodeOutput(z=z2, mu=mu_tilde2, log_var=log_var_tilde2),
+        )
 
 
-    def forward_pair(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> Tuple[VAEOutput, VAEOutput]:
-        """Full AdaGVAE forward pass: encode pairs with adaptive grouping, sample, and decode.
+    def forward(self, x: tuple[torch.Tensor, torch.Tensor], S: int = 1) -> AdaGVAEOutput:
+        """AdaGVAE training pass on a pair of images.
+
+        For single-image inference after training use the inherited :meth:`encode`
+        and :meth:`decode` methods.
 
         Parameters
         ----------
-        x1 : torch.Tensor
-            First input batch of shape ``[B, ...]``.
-        x2 : torch.Tensor
-            Second input batch of shape ``[B, ...]``.
+        x : tuple[torch.Tensor, torch.Tensor]
+            A ``(x1, x2)`` pair, each of shape ``[B, ...]``.
         S : int
             Number of latent samples for Monte Carlo estimates.
 
         Returns
         -------
-        Tuple[VAEOutput, VAEOutput]
-            A pair of VAE outputs, each containing:
-
-            - ``x_hat``: reconstructions from the adapted latent samples.
-            - ``z``: latent samples from the adapted posteriors.
-            - ``mu``: (adapted) posterior means.
-            - ``log_var``: (adapted) posterior log-variances.
+        AdaGVAEOutput
+            Adapted pair outputs containing reconstructions and posterior parameters
+            for both inputs.
         """
+        x1, x2 = x
         x1_enc, x2_enc = self._encode_pair(x1, x2, S=S)
         x1_dec = self._decode(x1_enc.z)
         x2_dec = self._decode(x2_enc.z)
-        return VAEOutput(x_hat=x1_dec.x_hat, z=x1_enc.z, mu=x1_enc.mu, log_var=x1_enc.log_var), \
-               VAEOutput(x_hat=x2_dec.x_hat, z=x2_enc.z, mu=x2_enc.mu, log_var=x2_enc.log_var)
+        return AdaGVAEOutput(
+            output1=VAEOutput(x_hat=x1_dec.x_hat, z=x1_enc.z, mu=x1_enc.mu, log_var=x1_enc.log_var),
+            output2=VAEOutput(x_hat=x2_dec.x_hat, z=x2_enc.z, mu=x2_enc.mu, log_var=x2_enc.log_var),
+        )
 
-    def compute_pair_loss(self,
-                          x1: torch.Tensor,
-                          x1_vae_output: VAEOutput,
-                          x2: torch.Tensor,
-                          x2_vae_output: VAEOutput,
-                          beta: float = 1,
-                          likelihood: Union[str, LikelihoodType] = LikelihoodType.GAUSSIAN) -> LossResult:
-        r"""Compute the combined ELBO for a pair of inputs with adaptive posteriors.
-
-        This method computes the sum of the standard VAE ELBOs for both inputs:
+    def compute_loss(self,
+                     x: tuple[torch.Tensor, torch.Tensor],
+                     vae_output: AdaGVAEOutput,
+                     beta: float = 1,
+                     likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
+        r"""Compute the combined ELBO for a pair of inputs with adapted posteriors.
 
         .. math::
 
@@ -468,63 +453,34 @@ class AdaGVAE(VAE):
                 + \left[ \mathbb{E}_{q(\hat{z} \mid x_2)}[\log p(x_2 \mid \hat{z})]
                 \;-\; \beta \, \mathrm{KL}(q(\hat{z} \mid x_2) \,\|\, p(\hat{z})) \right].
 
-        The key difference from standard VAE is that the posteriors :math:`q(\hat{z} | x_1)` and
-        :math:`q(\hat{z} | x_2)` are obtained from the adaptive grouping mechanism, which can
-        share dimensions based on KL divergence thresholds.
-
         Parameters
         ----------
-        x1 : torch.Tensor
-            First input batch of shape ``[B, ...]``.
-        x1_vae_output : VAEOutput
-            Output from the forward pass for ``x1``. Expected fields:
-
-            - ``x_hat`` (torch.Tensor): Reconstructions, shape ``[B, ...]`` or ``[B, S, ...]``.
-            - ``mu`` (torch.Tensor): (Adapted) posterior mean, shape ``[B, D_z]``.
-            - ``log_var`` (torch.Tensor): (Adapted) posterior log-variance, shape ``[B, D_z]``.
-
-        x2 : torch.Tensor
-            Second input batch of shape ``[B, ...]``.
-        x2_vae_output : VAEOutput
-            Output from the forward pass for ``x2``. Same structure as ``x1_vae_output``.
-        likelihood : Union[str, LikelihoodType], optional
-            Likelihood model for the reconstruction term.
-            Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
+        x : tuple[torch.Tensor, torch.Tensor]
+            The ``(x1, x2)`` pair of ground-truth inputs, each of shape ``[B, ...]``.
+        vae_output : AdaGVAEOutput
+            Output from :meth:`forward` called in training mode.
         beta : float, optional
-            Weighting factor for the KL term (beta-VAE).
-            ``beta = 1`` yields the standard objective. Defaults to 1.
+            KL weighting factor. ``beta = 1`` yields the standard objective.
+        likelihood : str | LikelihoodType, optional
+            Likelihood model for the reconstruction term (``'gaussian'`` or ``'bernoulli'``).
 
         Returns
         -------
         LossResult
-            Result containing:
-
-            * **objective** – Sum of negative ELBOs for both inputs (scalar).
-            * **diagnostics** – Dictionary with:
-
-              - ``"elbo"``: Sum of ELBOs for both inputs.
-              - ``"log_likelihood_x1"``: Mean reconstruction term for ``x1``.
-              - ``"log_likelihood_x2"``: Mean reconstruction term for ``x2``.
-              - ``"kl_divergence_x1"``: Mean KL divergence for ``x1``'s posterior.
-              - ``"kl_divergence_x2"``: Mean KL divergence for ``x2``'s posterior.
-
-        Notes
-        -----
-        - All diagnostics are **batch means** (per-sample losses averaged over ``B``).
-        - Gradients flow through both decoders; neither input is detached.
-        - The adaptive grouping introduces implicit structure learning through
-          the selective sharing of posterior dimensions.
+            Objective is sum of negative ELBOs; diagnostics include
+            ``"elbo"``, ``"log_likelihood_x1"``, ``"log_likelihood_x2"``,
+            ``"kl_divergence_x1"``, ``"kl_divergence_x2"``.
         """
-        x1_loss_info = super().compute_loss(x=x1, vae_output=x1_vae_output, beta=beta, likelihood=likelihood)
-        x2_loss_info = super().compute_loss(x=x2, vae_output=x2_vae_output, beta=beta, likelihood=likelihood)
-
+        x1, x2 = x
+        loss1 = super().compute_loss(x=x1, vae_output=vae_output.output1, beta=beta, likelihood=likelihood)
+        loss2 = super().compute_loss(x=x2, vae_output=vae_output.output2, beta=beta, likelihood=likelihood)
         return LossResult(
-            objective = x1_loss_info.objective + x2_loss_info.objective,
-            diagnostics = {
-                'elbo': x1_loss_info.diagnostics['elbo'] + x2_loss_info.diagnostics['elbo'],
-                'log_likelihood_x1': x1_loss_info.diagnostics['log_likelihood'],
-                'log_likelihood_x2': x2_loss_info.diagnostics['log_likelihood'],
-                'kl_divergence_x1': x1_loss_info.diagnostics['kl_divergence'],
-                'kl_divergence_x2': x2_loss_info.diagnostics['kl_divergence'],
+            objective=loss1.objective + loss2.objective,
+            diagnostics={
+                'elbo': loss1.diagnostics['elbo'] + loss2.diagnostics['elbo'],
+                'log_likelihood_x1': loss1.diagnostics['log_likelihood'],
+                'log_likelihood_x2': loss2.diagnostics['log_likelihood'],
+                'kl_divergence_x1': loss1.diagnostics['kl_divergence'],
+                'kl_divergence_x2': loss2.diagnostics['kl_divergence'],
             }
         )

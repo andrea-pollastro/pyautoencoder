@@ -8,6 +8,7 @@ from pyautoencoder.variational.vae import (
     VAEEncodeOutput,
     VAEDecodeOutput,
     VAEOutput,
+    AdaGVAEOutput,
 )
 from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian
 
@@ -39,6 +40,101 @@ class DummyDecoder(nn.Module):
         self.last_input_shape = tuple(z.shape)
         self.last_grad_enabled = torch.is_grad_enabled()
         return self.linear(z)
+
+# ================= Build mechanism =================
+
+def test_vae_guard_fires_again_after_built_reset():
+    """The guard checks _built on every call; resetting it re-enables the guard."""
+    B, in_features, latent_dim = 2, 4, 2
+    x = torch.randn(B, in_features)
+    encoder = DummyEncoder(in_features=in_features, feat_dim=6)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    vae.build(x)
+    vae.forward(x)  # works
+
+    vae._built = False
+    with pytest.raises(NotBuiltError):
+        vae.forward(x)
+    with pytest.raises(NotBuiltError):
+        vae._encode(x)
+    with pytest.raises(NotBuiltError):
+        vae._decode(torch.randn(B, 1, latent_dim))
+
+
+def test_vae_guard_passes_args_and_kwargs_correctly():
+    """The guard wrapper must not swallow positional or keyword arguments."""
+    B, in_features, latent_dim, S = 2, 4, 2, 5
+    x = torch.randn(B, in_features)
+    encoder = DummyEncoder(in_features=in_features, feat_dim=6)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    vae.build(x)
+    enc = vae._encode(x, S=S)
+    assert enc.z.shape == (B, S, latent_dim)
+
+
+def test_vae_build_that_omits_setting_built_raises():
+    """If build() doesn't set _built = True, the wrapper must raise NotBuiltError."""
+    class BrokenVAE(VAE):
+        def build(self, input_sample):
+            pass  # deliberately omits self._built = True
+
+    B, in_features, latent_dim = 2, 4, 2
+    encoder = DummyEncoder(in_features=in_features, feat_dim=6)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    broken = BrokenVAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    with pytest.raises(NotBuiltError):
+        broken.build(torch.randn(B, in_features))
+
+    assert broken._built is False
+
+
+def test_adagvae_all_guarded_methods_raise_before_build():
+    """_encode, _decode (inherited) and _encode_pair (own) are all guarded on AdaGVAE."""
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    B, in_features, latent_dim = 2, 4, 2
+    x1 = torch.randn(B, in_features)
+    x2 = torch.randn(B, in_features)
+    encoder = DummyEncoder(in_features=in_features, feat_dim=6)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    ada = AdaGVAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    for call in [
+        lambda: ada.forward((x1, x2)),
+        lambda: ada._encode(x1),
+        lambda: ada._decode(torch.randn(B, 1, latent_dim)),
+        lambda: ada._encode_pair(x1, x2),
+    ]:
+        with pytest.raises(NotBuiltError):
+            call()
+
+
+def test_adagvae_guard_fires_again_after_built_reset():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    B, in_features, latent_dim = 2, 4, 2
+    x1, x2 = torch.randn(B, in_features), torch.randn(B, in_features)
+    encoder = DummyEncoder(in_features=in_features, feat_dim=6)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    ada = AdaGVAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    ada.build(x1)
+    ada.forward((x1, x2))  # works
+
+    ada._built = False
+    for call in [
+        lambda: ada.forward((x1, x2)),
+        lambda: ada._encode_pair(x1, x2),
+        lambda: ada._encode(x1),
+    ]:
+        with pytest.raises(NotBuiltError):
+            call()
+
 
 # ================= VAE =================
 
@@ -603,23 +699,21 @@ def test_vae_compute_loss_with_different_likelihood_formats():
 # ================= AdaGVAE =================
 
 def test_adagvae_inherits_from_vae():
-    """Test that AdaGVAE is a subclass of VAE."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     in_features, latent_dim = 6, 3
     encoder = DummyEncoder(in_features=in_features, feat_dim=10)
     decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
 
     adagvae = AdaGVAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
-    
+
     assert isinstance(adagvae, VAE)
     assert isinstance(adagvae, AdaGVAE)
 
 
 def test_adagvae_raises_before_build():
-    """Test that AdaGVAE raises NotBuiltError before build."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, latent_dim = 4, 6, 3
     encoder = DummyEncoder(in_features=in_features, feat_dim=10)
     decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
@@ -629,16 +723,15 @@ def test_adagvae_raises_before_build():
     x2 = torch.randn(B, in_features)
 
     with pytest.raises(NotBuiltError, match="Model is not built"):
-        adagvae.forward_pair(x1, x2)
+        adagvae.forward((x1, x2))
 
     with pytest.raises(NotBuiltError, match="Model is not built"):
         adagvae._encode_pair(x1, x2)
 
 
-def test_adagvae_forward_pair_shapes_and_types():
-    """Test AdaGVAE forward with paired inputs."""
+def test_adagvae_forward_training_returns_adagvae_output():
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, feat_dim, latent_dim, out_features, S = 4, 6, 8, 3, 5, 2
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -651,28 +744,52 @@ def test_adagvae_forward_pair_shapes_and_types():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    # Forward returns tuple of two VAEOutput
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
+    out = adagvae.forward((x1, x2), S=S)
 
-    assert isinstance(out1, VAEOutput)
-    assert isinstance(out2, VAEOutput)
+    assert isinstance(out, AdaGVAEOutput)
+    assert isinstance(out.output1, VAEOutput)
+    assert isinstance(out.output2, VAEOutput)
 
-    # Check shapes
-    assert out1.z.shape == (B, S, latent_dim)
-    assert out1.mu.shape == (B, latent_dim)
-    assert out1.log_var.shape == (B, latent_dim)
-    assert out1.x_hat.shape == (B, S, out_features)
+    assert out.output1.z.shape == (B, S, latent_dim)
+    assert out.output1.mu.shape == (B, latent_dim)
+    assert out.output1.log_var.shape == (B, latent_dim)
+    assert out.output1.x_hat.shape == (B, S, out_features)
 
-    assert out2.z.shape == (B, S, latent_dim)
-    assert out2.mu.shape == (B, latent_dim)
-    assert out2.log_var.shape == (B, latent_dim)
-    assert out2.x_hat.shape == (B, S, out_features)
+    assert out.output2.z.shape == (B, S, latent_dim)
+    assert out.output2.mu.shape == (B, latent_dim)
+    assert out.output2.log_var.shape == (B, latent_dim)
+    assert out.output2.x_hat.shape == (B, S, out_features)
+
+
+def test_adagvae_inference_via_encode_decode():
+    """After training, single-image inference uses the inherited encode() / decode()."""
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    B, in_features, feat_dim, latent_dim, out_features, S = 4, 6, 8, 3, 5, 2
+    x = torch.randn(B, in_features)
+
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=out_features)
+    adagvae = AdaGVAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    adagvae.build(x)
+
+    adagvae.eval()
+
+    enc = adagvae.encode(x, S=S)
+    dec = adagvae.decode(enc.z)
+
+    assert isinstance(enc, VAEEncodeOutput)
+    assert enc.z.shape == (B, S, latent_dim)
+    assert enc.z.requires_grad is False
+
+    assert isinstance(dec, VAEDecodeOutput)
+    assert dec.x_hat.shape == (B, S, out_features)
+    assert dec.x_hat.requires_grad is False
 
 
 def test_adagvae_encode_pair_returns_correct_shapes():
-    """Test AdaGVAE _encode_pair returns correct shapes."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 3
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -700,10 +817,9 @@ def test_adagvae_encode_pair_returns_correct_shapes():
 
 
 def test_adagvae_compute_loss_returns_correct_structure():
-    """Test AdaGVAE compute_loss returns LossResult with correct structure."""
     from pyautoencoder.variational.vae import AdaGVAE
     from pyautoencoder.loss.base import LossResult
-    
+
     B, in_features, feat_dim, latent_dim, S = 4, 6, 8, 3, 2
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -716,19 +832,13 @@ def test_adagvae_compute_loss_returns_correct_structure():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
-    loss_result = adagvae.compute_pair_loss(x1, out1, x2, out2)
+    out = adagvae.forward((x1, x2), S=S)
+    loss_result = adagvae.compute_loss((x1, x2), out)
 
-    # Check return type
     assert isinstance(loss_result, LossResult)
-    assert hasattr(loss_result, 'objective')
-    assert hasattr(loss_result, 'diagnostics')
-
-    # objective should be a scalar tensor
     assert loss_result.objective.dim() == 0
     assert loss_result.objective.requires_grad is True
 
-    # diagnostics should contain expected keys
     assert isinstance(loss_result.diagnostics, dict)
     assert 'elbo' in loss_result.diagnostics
     assert 'log_likelihood_x1' in loss_result.diagnostics
@@ -736,7 +846,6 @@ def test_adagvae_compute_loss_returns_correct_structure():
     assert 'kl_divergence_x1' in loss_result.diagnostics
     assert 'kl_divergence_x2' in loss_result.diagnostics
 
-    # All diagnostics should be floats
     assert isinstance(loss_result.diagnostics['elbo'], float)
     assert isinstance(loss_result.diagnostics['log_likelihood_x1'], float)
     assert isinstance(loss_result.diagnostics['log_likelihood_x2'], float)
@@ -745,9 +854,8 @@ def test_adagvae_compute_loss_returns_correct_structure():
 
 
 def test_adagvae_compute_loss_backward_flows():
-    """Test that gradients flow through all components in AdaGVAE."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, feat_dim, latent_dim, S = 2, 4, 6, 2, 2
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -760,11 +868,10 @@ def test_adagvae_compute_loss_backward_flows():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
-    loss_result = adagvae.compute_pair_loss(x1, out1, x2, out2)
+    out = adagvae.forward((x1, x2), S=S)
+    loss_result = adagvae.compute_loss((x1, x2), out)
     loss_result.objective.backward()
 
-    # Check gradients in all components
     enc_grads = [p.grad for p in encoder.parameters() if p.requires_grad]
     dec_grads = [p.grad for p in decoder.parameters() if p.requires_grad]
     sl_grads = [p.grad for p in adagvae.sampling_layer.parameters() if p.requires_grad]
@@ -775,9 +882,8 @@ def test_adagvae_compute_loss_backward_flows():
 
 
 def test_adagvae_compute_loss_with_beta():
-    """Test AdaGVAE compute_loss with beta parameter."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -790,20 +896,12 @@ def test_adagvae_compute_loss_with_beta():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
+    out = adagvae.forward((x1, x2), S=S)
 
-    # Compute with beta=1
-    loss_beta1 = adagvae.compute_pair_loss(x1, out1, x2, out2, beta=1.0)
-    
-    # Compute with beta=0.5
-    loss_beta05 = adagvae.compute_pair_loss(x1, out1, x2, out2, beta=0.5)
+    loss_beta1 = adagvae.compute_loss((x1, x2), out, beta=1.0)
+    loss_beta05 = adagvae.compute_loss((x1, x2), out, beta=0.5)
 
-    # ELBO should be different
-    elbo_beta1 = loss_beta1.diagnostics['elbo']
-    elbo_beta05 = loss_beta05.diagnostics['elbo']
-    
-    # beta=0.5 should have higher ELBO (less KL penalty)
-    assert elbo_beta05 > elbo_beta1
+    assert loss_beta05.diagnostics['elbo'] > loss_beta1.diagnostics['elbo']
 
 
 def test_adagvae_identical_inputs_produce_no_grouping():
@@ -822,12 +920,7 @@ def test_adagvae_identical_inputs_produce_no_grouping():
     adagvae.eval()
     torch.set_grad_enabled(False)
 
-    # Identical inputs → mu1 == mu2, log_var1 == log_var2 → KL(q1||q2) = 0 everywhere
-    # → max_delta = min_delta = 0 → tau = 0 → mask = (0 < 0) = False
-    # → no grouping: adapted posteriors equal the original individual posteriors
     enc1_pair, enc2_pair = adagvae._encode_pair(x, x.clone(), S=1)
-
-    # Reference: single-input encode
     single_enc = adagvae._encode(x, S=1)
 
     assert torch.allclose(enc1_pair.mu, single_enc.mu, atol=1e-6)
@@ -837,9 +930,8 @@ def test_adagvae_identical_inputs_produce_no_grouping():
 
 
 def test_adagvae_encode_pair_with_different_s():
-    """Test AdaGVAE _encode_pair with different S values."""
     from pyautoencoder.variational.vae import AdaGVAE
-    
+
     B, in_features, feat_dim, latent_dim = 3, 5, 7, 2
     x1 = torch.randn(B, in_features)
     x2 = torch.randn(B, in_features)
@@ -852,19 +944,16 @@ def test_adagvae_encode_pair_with_different_s():
     adagvae.eval()
     torch.set_grad_enabled(False)
 
-    # Test with S=1
     enc1_s1, enc2_s1 = adagvae._encode_pair(x1, x2, S=1)
     assert enc1_s1.z.shape == (B, 1, latent_dim)
     assert enc2_s1.z.shape == (B, 1, latent_dim)
 
-    # Test with S=5
     enc1_s5, enc2_s5 = adagvae._encode_pair(x1, x2, S=5)
     assert enc1_s5.z.shape == (B, 5, latent_dim)
     assert enc2_s5.z.shape == (B, 5, latent_dim)
 
 
 def test_adagvae_compute_loss_bernoulli_likelihood():
-    """Test AdaGVAE compute_loss with Bernoulli likelihood."""
     from pyautoencoder.variational.vae import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
@@ -879,16 +968,16 @@ def test_adagvae_compute_loss_bernoulli_likelihood():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
-    loss_result = adagvae.compute_pair_loss(x1, out1, x2, out2, likelihood='bernoulli')
+    out = adagvae.forward((x1, x2), S=S)
+    loss_result = adagvae.compute_loss((x1, x2), out, likelihood='bernoulli')
 
     assert isinstance(loss_result.objective, torch.Tensor)
     assert loss_result.objective.dim() == 0
     assert 'elbo' in loss_result.diagnostics
 
 
-def test_adagvae_compute_pair_loss_equals_sum_of_individual_losses():
-    """compute_pair_loss objective == sum of the two individual VAE ELBO losses."""
+def test_adagvae_compute_loss_equals_sum_of_individual_losses():
+    """compute_loss objective == sum of the two individual VAE ELBO losses."""
     from pyautoencoder.variational.vae import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
@@ -903,12 +992,12 @@ def test_adagvae_compute_pair_loss_equals_sum_of_individual_losses():
     adagvae.train()
     torch.set_grad_enabled(True)
 
-    out1, out2 = adagvae.forward_pair(x1, x2, S=S)
-    pair_loss = adagvae.compute_pair_loss(x1, out1, x2, out2)
+    out = adagvae.forward((x1, x2), S=S)
+    pair_loss = adagvae.compute_loss((x1, x2), out)
 
-    # compute_pair_loss calls VAE.compute_loss twice and adds objectives
-    loss1 = adagvae.compute_loss(x1, out1)
-    loss2 = adagvae.compute_loss(x2, out2)
+    # compute_loss internally calls VAE.compute_loss twice; verify additivity
+    loss1 = VAE.compute_loss(adagvae, x=x1, vae_output=out.output1)
+    loss2 = VAE.compute_loss(adagvae, x=x2, vae_output=out.output2)
 
     assert torch.allclose(pair_loss.objective, loss1.objective + loss2.objective, atol=1e-5)
     assert abs(

@@ -1,4 +1,5 @@
-from typing import Any, Mapping, Callable, Iterable
+from typing import Any
+from collections.abc import Callable, Iterable, Mapping
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
@@ -78,77 +79,75 @@ class BuildGuardMixin(ABC):
         super().__init__()
         self._built = False
 
-    @staticmethod
-    def _make_guard(name: str, orig: Callable[..., Any]) -> Callable[..., Any]:
-        """Create a guarded wrapper around a method that enforces the build contract.
-
-        The returned wrapper checks ``self._built`` before delegating to the original
-        method. If the model is not built, :class:`NotBuiltError` is raised. On the
-        first successful call after the model is built, the wrapper replaces itself
-        on that instance with the original bound method so that further calls incur
-        no additional overhead.
-
-        Parameters
-        ----------
-        name : str
-            Name of the method being guarded.
-        orig : Callable
-            Original unbound method object.
+    @property
+    def built(self) -> bool:
+        """Whether the module has been successfully built.
 
         Returns
         -------
-        Callable
-            A wrapper that enforces the build guard on the given method.
+        bool
+            ``True`` if :meth:`build` has completed and set ``self._built = True``,
+            ``False`` otherwise.
         """
+
+        return self._built
+
+    @staticmethod
+    def _make_guard(orig: Callable[..., Any]) -> Callable[..., Any]:
+        """Wrap ``orig`` so it raises :class:`NotBuiltError` until the model is built."""
 
         @wraps(orig)
         def guarded(self, *args, **kwargs):
             if not getattr(self, "_built", False):
                 raise NotBuiltError("Model is not built. Call `build(x)` first.")
-            # first post-build call: swap in the original method on THIS instance
-            bound_orig = orig.__get__(self, self.__class__)
-            setattr(self, name, bound_orig)
-            return bound_orig(*args, **kwargs)
+            return orig(self, *args, **kwargs)
         return guarded
 
     def __init_subclass__(cls, **kwargs) -> None:
-        """Hook that installs build guards on subclass methods.
+        """Hook that installs build guards on subclass methods at class-creation time.
 
-        At subclass creation time this hook:
+        Subclasses only need to declare **new** method names in ``_GUARDED``; guards
+        from all ancestors are accumulated automatically. ``_GUARDED`` may be omitted
+        entirely when a subclass adds no new guarded methods.
 
-        1. Validates the presence and type of ``cls._GUARDED``.
-        2. Converts ``cls._GUARDED`` to a :class:`set` of method names.
-        3. Wraps each method listed in ``_GUARDED`` (if defined on the subclass)
-        with a guard produced by :meth:`_make_guard`.
-        4. If the subclass defines :meth:`build`, wraps it so that:
-
-        * It is executed under ``torch.no_grad()``.
-        * It is required to set ``self._built = True`` once building is done.
-        * A :class:`NotBuiltError` is raised otherwise.
+        ``_GUARDED`` is required on classes that have no ancestor defining it
+        (i.e. the root of a guarded hierarchy). Use ``_GUARDED = set()`` if the
+        root exposes no guarded methods.
         """
 
         super().__init_subclass__(**kwargs)
 
-        guarded = getattr(cls, "_GUARDED", None)
-        if guarded is None:
+        own_guarded = cls.__dict__.get("_GUARDED", None)
+
+        # Walk the MRO to find the nearest ancestor whose _GUARDED was already
+        # accumulated and stamped onto the class by this hook.
+        parent_guarded: set[str] = set()
+        for base in cls.__mro__[1:]:
+            if "_GUARDED" in base.__dict__:
+                parent_guarded = set(base.__dict__["_GUARDED"])
+                break
+
+        # Require explicit _GUARDED only when no ancestor provides one.
+        if own_guarded is None and not parent_guarded:
             raise TypeError(
                 f"{cls.__name__} must define a class attribute `_GUARDED` "
-                "with the names of methods to guard."
-            )
-        
-        if not isinstance(guarded, Iterable) or isinstance(guarded, (str, bytes)):
-            raise TypeError(
-                f"{cls.__name__}._GUARDED must be an iterable of method names, "
-                f"got {type(guarded).__name__}."
+                "with the names of methods to guard (use `_GUARDED = set()` if none)."
             )
 
-        guarded = set(guarded)
-        setattr(cls, "_GUARDED", guarded)
+        if own_guarded is not None:
+            if not isinstance(own_guarded, Iterable) or isinstance(own_guarded, (str, bytes)):
+                raise TypeError(
+                    f"{cls.__name__}._GUARDED must be an iterable of method names, "
+                    f"got {type(own_guarded).__name__}."
+                )
 
-        for name in guarded:
+        full_guarded = set(own_guarded or set()) | parent_guarded
+        setattr(cls, "_GUARDED", full_guarded)
+
+        for name in full_guarded:
             if name in cls.__dict__:
                 orig = cls.__dict__[name]
-                setattr(cls, name, BuildGuardMixin._make_guard(name, orig))
+                setattr(cls, name, BuildGuardMixin._make_guard(orig))
 
         if "build" in cls.__dict__:
             _orig_build = cls.__dict__["build"]
@@ -374,19 +373,6 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
 
         pass
 
-    @property
-    def built(self) -> bool:
-        """Whether the autoencoder has been successfully built.
-
-        Returns
-        -------
-        bool
-            ``True`` if :meth:`build` has completed and set ``self._built = True``,
-            ``False`` otherwise.
-        """
-
-        return self._built
-    
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False):
         """Load a state dictionary into a built autoencoder.
 
@@ -423,7 +409,7 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
         return super().load_state_dict(state_dict=state_dict, strict=strict, assign=assign)
     
     @abstractmethod
-    def compute_loss(self, x: torch.Tensor, model_output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
+    def compute_loss(self, x: torch.Tensor, output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
         """Compute the loss for the autoencoder.
 
         This abstract method must be implemented by subclasses to compute
