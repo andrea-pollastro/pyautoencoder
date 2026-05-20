@@ -1,22 +1,12 @@
 from typing import Any
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Mapping
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
-from functools import wraps
+from torch.nn.modules.lazy import LazyModuleMixin
 
 from ..loss.base import LossResult
-
-class NotBuiltError(RuntimeError): 
-    """Exception raised when a guarded method is called on a model that has not been built.
-
-    This error is raised by :class:`BuildGuardMixin` when a method
-    listed in ``_GUARDED`` is invoked before :meth:`build` has successfully
-    completed and set ``self._built = True``.
-    """
-
-    pass
 
 @dataclass(slots=True)
 class ModelOutput(ABC):
@@ -51,143 +41,25 @@ class ModelOutput(ABC):
                 parts.append(f"{name}={s}")
         return f"{self.__class__.__name__}({', '.join(parts)})"
     
-class BuildGuardMixin(ABC):
-    """Mixin that guards selected methods until the module has been built.
-
-    Classes that inherit from this mixin must define a class attribute
-    ``_GUARDED`` containing the **names** of methods that should not be
-    callable until :meth:`build` has been run successfully. These methods are
-    wrapped at class creation time so that they:
-
-    * Raise :class:`NotBuiltError` when called while ``self._built`` is ``False``.
-    * On the first successful call after the model is built, replace the guarded wrapper on that instance with the original method for zero overhead in subsequent calls.
-
-    If the subclass defines a :meth:`build` method, it is also wrapped so that
-    it is executed under ``torch.no_grad()`` and is required to set
-    ``self._built = True`` when the module is ready.
-
-    Attributes
-    ----------
-    _built : bool
-        Flag indicating whether :meth:`build` has completed successfully.
-    _GUARDED : set[str]
-        Names of methods that are wrapped with the build guard. Must be defined
-        by subclasses as an iterable of method names.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self._built = False
-
-    @property
-    def built(self) -> bool:
-        """Whether the module has been successfully built.
-
-        Returns
-        -------
-        bool
-            ``True`` if :meth:`build` has completed and set ``self._built = True``,
-            ``False`` otherwise.
-        """
-
-        return self._built
-
-    @staticmethod
-    def _make_guard(orig: Callable[..., Any]) -> Callable[..., Any]:
-        """Wrap ``orig`` so it raises :class:`NotBuiltError` until the model is built."""
-
-        @wraps(orig)
-        def guarded(self, *args, **kwargs):
-            if not getattr(self, "_built", False):
-                raise NotBuiltError("Model is not built. Call `build(x)` first.")
-            return orig(self, *args, **kwargs)
-        return guarded
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        """Hook that installs build guards on subclass methods at class-creation time.
-
-        Subclasses only need to declare **new** method names in ``_GUARDED``; guards
-        from all ancestors are accumulated automatically. ``_GUARDED`` may be omitted
-        entirely when a subclass adds no new guarded methods.
-
-        ``_GUARDED`` is required on classes that have no ancestor defining it
-        (i.e. the root of a guarded hierarchy). Use ``_GUARDED = set()`` if the
-        root exposes no guarded methods.
-        """
-
-        super().__init_subclass__(**kwargs)
-
-        own_guarded = cls.__dict__.get("_GUARDED", None)
-
-        # Walk the MRO to find the nearest ancestor whose _GUARDED was already
-        # accumulated and stamped onto the class by this hook.
-        parent_guarded: set[str] = set()
-        for base in cls.__mro__[1:]:
-            if "_GUARDED" in base.__dict__:
-                parent_guarded = set(base.__dict__["_GUARDED"])
-                break
-
-        # Require explicit _GUARDED only when no ancestor provides one.
-        if own_guarded is None and not parent_guarded:
-            raise TypeError(
-                f"{cls.__name__} must define a class attribute `_GUARDED` "
-                "with the names of methods to guard (use `_GUARDED = set()` if none)."
-            )
-
-        if own_guarded is not None:
-            if not isinstance(own_guarded, Iterable) or isinstance(own_guarded, (str, bytes)):
-                raise TypeError(
-                    f"{cls.__name__}._GUARDED must be an iterable of method names, "
-                    f"got {type(own_guarded).__name__}."
-                )
-
-        full_guarded = set(own_guarded or set()) | parent_guarded
-        setattr(cls, "_GUARDED", full_guarded)
-
-        for name in full_guarded:
-            if name in cls.__dict__:
-                orig = cls.__dict__[name]
-                setattr(cls, name, BuildGuardMixin._make_guard(orig))
-
-        if "build" in cls.__dict__:
-            _orig_build = cls.__dict__["build"]
-
-            @wraps(_orig_build)
-            def _wrapped_build(self, *args: Any, **kwargs: Any) -> None:
-
-                if getattr(self, "_built", False):
-                    return
-
-                with torch.no_grad():
-                    _orig_build(self, *args, **kwargs)
-
-                if not getattr(self, "_built", False):
-                    raise NotBuiltError(
-                        "Subclass build(x) must set `self._built = True` once building is done."
-                    )
-
-            setattr(cls, "build", _wrapped_build)
-
-class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
-    """Base class for autoencoders with an explicit build step.
+class BaseAutoencoder(nn.Module, ABC):
+    """Base class for autoencoders.
 
     This class defines a common interface for autoencoders that split their
-    logic into *encoding*, *decoding* and *forward* passes, and enforces a
-    build step via :class:`BuildGuardMixin`.
+    logic into *encoding*, *decoding* and *forward* passes.
 
     Training API (gradients enabled)
     --------------------------------
     Subclasses must implement the following abstract methods:
 
-    * ``_encode(x, *args, **kwargs) -> ModelOutput``  
+    * ``_encode(x, *args, **kwargs) -> ModelOutput``
       Low-level encoder that typically returns a :class:`ModelOutput` with at
       least a latent code attribute (for example ``z``).
 
-    * ``_decode(z, *args, **kwargs) -> ModelOutput``  
+    * ``_decode(z, *args, **kwargs) -> ModelOutput``
       Low-level decoder that typically returns a :class:`ModelOutput` with at
       least a reconstruction attribute (for example ``x_hat``).
 
-    * ``forward(x, *args, **kwargs) -> ModelOutput``  
+    * ``forward(x, *args, **kwargs) -> ModelOutput``
       Full forward pass used during training. This usually combines encoding
       and decoding and returns a :class:`ModelOutput` that may contain both
       ``z`` and ``x_hat``, plus any other quantities needed for loss
@@ -201,26 +73,13 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
     * :meth:`encode` – calls :meth:`_encode` without tracking gradients.
     * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
 
-    Build Contract
-    --------------
-    Before training or inference, subclasses must implement and call
-    :meth:`build` with a representative input tensor. The build method is
-    responsible for creating any size-dependent layers or buffers and must set
-    ``self._built = True`` when the module is ready. Methods listed in
-    ``_GUARDED`` (by default ``{"forward", "_encode", "_decode"}``) are
-    protected and will raise :class:`NotBuiltError` if called before the build
-    step has completed.
-
-    Attributes
+    Build step
     ----------
-    _GUARDED : set[str]
-        Names of methods guarded by :class:`BuildGuardMixin`. By default
-        ``{"forward", "_encode", "_decode"}``.
+    :meth:`build` performs a no-grad forward pass with a representative input
+    to materialize any lazy (size-inferred) layers. Call it once before
+    training or loading a state dict.
     """
 
-
-    _GUARDED = {"forward", "_encode", "_decode"}
-    
     def __init__(self) -> None:
         super().__init__()
 
@@ -349,64 +208,57 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
 
         return self._decode(z, *args, **kwargs)
     
-    # ----- required build step -----
-    @abstractmethod
-    def build(self, input_sample: torch.Tensor) -> None:
-        """Build the module given a representative input sample.
-
-        Subclasses must implement this method to create any size-dependent layers,
-        parameters or buffers (for example layers whose dimensions depend on
-        ``input_sample.shape``). The implementation **must** set
-        ``self._built = True`` once the module is fully initialized, otherwise
-        :class:`NotBuiltError` will be raised by the build guard.
-
-        This method is executed under ``torch.no_grad()`` by
-        :class:`BuildGuardMixin`.
-
-        Parameters
-        ----------
-        input_sample : torch.Tensor
-            A representative input tensor used to infer sizes and initialize
-            internal components.
-        
-        """
-
-        pass
-
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False):
-        """Load a state dictionary into a built autoencoder.
-
-        This override enforces that :meth:`build` has been called before loading
-        weights, so that all parameters and buffers already exist with the correct
-        shapes. If the model is not built yet, :class:`NotBuiltError` is raised
-        with a hint to call :meth:`build` using a representative input.
+        """Load a state dict, raising an error if lazy layers have not been built.
 
         Parameters
         ----------
         state_dict : Mapping[str, Any]
-            A state dictionary as produced by :meth:`state_dict`.
+            State dictionary to load.
         strict : bool, optional
-            If ``True`` (default), the keys in ``state_dict`` must exactly match
-            the keys returned by :meth:`state_dict`. If ``False``, missing keys
-            and unexpected keys are ignored.
+            Whether to strictly enforce that the keys in ``state_dict`` match
+            the keys returned by this module's :meth:`state_dict`. Defaults to ``True``.
         assign : bool, optional
-            If ``True``, the incoming tensors in ``state_dict`` are directly
-            assigned to the module's parameters and buffers, instead of copying
-            data into existing tensors.
+            Whether to assign tensors instead of copying them. Defaults to ``False``.
 
         Returns
         -------
-        Any
-            The same value returned by :meth:`torch.nn.Module.load_state_dict`,
-            typically a :class:`torch.nn.modules.module._IncompatibleKeys` object.
-        """
+        torch.nn.modules.module._IncompatibleKeys
+            Named tuple with ``missing_keys`` and ``unexpected_keys`` fields,
+            as returned by :meth:`torch.nn.Module.load_state_dict`.
 
-        if not self._built:
-            raise NotBuiltError(
-                "load_state_dict called before build(). "
-                "Call model.build(example_x) so parameters exist, then load."
+        Raises
+        ------
+        RuntimeError
+            If any :class:`~torch.nn.modules.lazy.LazyModuleMixin` submodule has
+            not yet been materialized. Call :meth:`build` first.
+        """
+        uninitialized = [
+            name for name, m in self.named_modules()
+            if isinstance(m, LazyModuleMixin)
+        ]
+        if uninitialized:
+            raise RuntimeError(
+                f"Call build() before load_state_dict(). "
+                f"Uninitialized modules: {uninitialized}"
             )
-        return super().load_state_dict(state_dict=state_dict, strict=strict, assign=assign)
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
+    
+    @torch.no_grad()
+    def build(self, input_sample: torch.Tensor) -> None:
+        """Materialize lazy layers with a representative input.
+
+        Performs a no-grad forward pass so that any
+        :class:`~torch.nn.modules.lazy.LazyModuleMixin` layers infer their
+        shapes. Call this once before training or loading a state dict.
+
+        Parameters
+        ----------
+        input_sample : torch.Tensor
+            A representative input batch (e.g., a single batch from the
+            training set). Only the shape matters; values are not used.
+        """
+        self(input_sample)
     
     @abstractmethod
     def compute_loss(self, x: torch.Tensor, output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
@@ -420,7 +272,7 @@ class BaseAutoencoder(BuildGuardMixin, nn.Module, ABC):
         ----------
         x : torch.Tensor
             Ground-truth inputs of shape ``[B, ...]``.
-        model_output : ModelOutput
+        output : ModelOutput
             Output from the forward pass, containing reconstructions, latent codes,
             and any other information needed to compute the loss.
         *args

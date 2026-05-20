@@ -17,7 +17,8 @@ class VAEEncodeOutput(ModelOutput):
     Attributes
     ----------
     z : torch.Tensor
-        Latent samples of shape ``[B, S, D_z]`` (with ``S = 1`` allowed).
+        Latent samples of shape ``[B, S, D_z]``, produced by
+        :meth:`VAE._encode` or :meth:`VAE.encode`.
     mu : torch.Tensor
         Mean of the approximate posterior ``q(z \mid x)``, shape ``[B, D_z]``.
     log_var : torch.Tensor
@@ -35,7 +36,8 @@ class VAEDecodeOutput(ModelOutput):
     Attributes
     ----------
     x_hat : torch.Tensor
-        Reconstructions or logits of shape ``[B, S, ...]``.
+        Reconstructions or logits of shape ``[B, S, ...]``, produced by
+        :meth:`VAE._decode` or :meth:`VAE.decode`.
     """
 
     x_hat: torch.Tensor
@@ -47,9 +49,11 @@ class VAEOutput(ModelOutput):
     Attributes
     ----------
     x_hat : torch.Tensor
-        Reconstructions or logits, shape ``[B, S, ...]``.
+        Reconstructions or logits of shape ``[B, S, ...]``, produced by
+        :meth:`VAE.forward`.
     z : torch.Tensor
-        Latent samples, shape ``[B, S, D_z]``.
+        Latent samples of shape ``[B, S, D_z]``, produced by
+        :meth:`VAE.forward`.
     mu : torch.Tensor
         Mean of ``q(z \mid x)``, shape ``[B, D_z]``.
     log_var : torch.Tensor
@@ -82,11 +86,6 @@ class VAE(BaseAutoencoder):
     ):
         """Construct a Variational Autoencoder from an encoder, decoder, and latent size.
 
-        Notes
-        -----
-        A sampling layer is internally created using a fully factorized Gaussian
-        (``FullyFactorizedGaussian``). It is fixed and not configurable from the outside.
-
         Parameters
         ----------
         encoder : nn.Module
@@ -95,6 +94,11 @@ class VAE(BaseAutoencoder):
             Maps latent samples ``z`` to reconstructions ``x_hat``.
         latent_dim : int
             Dimensionality ``D_z`` of the latent space.
+
+        Notes
+        -----
+        A :class:`FullyFactorizedGaussian` sampling layer is created internally
+        and not exposed as a constructor parameter.
         """
 
         super().__init__()
@@ -112,8 +116,8 @@ class VAE(BaseAutoencoder):
         x : torch.Tensor
             Input batch of shape ``[B, ...]``. The encoder must output a flat
             feature vector per sample suitable for the sampling layer.
-        S : int
-            Number of latent samples per input.
+        S : int, optional
+            Number of latent samples per input. Defaults to 1.
 
         Returns
         -------
@@ -159,8 +163,8 @@ class VAE(BaseAutoencoder):
         ----------
         x : torch.Tensor
             Input batch of shape ``[B, ...]``.
-        S : int
-            Number of latent samples for Monte Carlo estimates.
+        S : int, optional
+            Number of latent samples for Monte Carlo estimates. Defaults to 1.
 
         Returns
         -------
@@ -179,25 +183,6 @@ class VAE(BaseAutoencoder):
         dec = self._decode(enc.z)
         return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)
     
-    def build(self, input_sample: torch.Tensor) -> None:
-        """Build the VAE using a representative input sample.
-
-        The encoder is applied to ``input_sample`` to obtain feature vectors,
-        which are then used to build the Gaussian sampling layer. Once the
-        sampling layer is built, the VAE is marked as constructed.
-
-        Parameters
-        ----------
-        input_sample : torch.Tensor
-            Example input tensor used to infer encoder feature dimensionality.
-        """
-
-        f = self.encoder(input_sample)
-        self.sampling_layer.build(f)
-        if not self.sampling_layer.built:
-            raise RuntimeError("Sampling layer building failed.")
-        self._built = True
-
     def compute_loss(self,
                      x: torch.Tensor, 
                      vae_output: VAEOutput,
@@ -230,14 +215,14 @@ class VAE(BaseAutoencoder):
                 \log p(x \mid z^{(s)}).
 
         Broadcasting
-        ----------------------
+        ------------
         - If ``x_hat`` has shape ``[B, ...]``, it is expanded to ``[B, 1, ...]``.
         - ``x`` is broadcast to match the sample dimension of ``x_hat``.
 
         Parameters
         ----------
         x : torch.Tensor
-            Ground-truth inputs, shape ``[B, ...]``.
+            Ground-truth inputs of shape ``[B, ...]``.
         vae_output : VAEOutput
             Output from the VAE forward pass. Expected fields include:
 
@@ -245,12 +230,12 @@ class VAE(BaseAutoencoder):
             - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``.
             - ``log_var`` (torch.Tensor): Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
 
-        likelihood : str | LikelihoodType, optional
-            Likelihood model for the reconstruction term. 
-            Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
         beta : float, optional
-            Weighting factor for the KL term (beta-VAE). 
+            Weighting factor for the KL term (beta-VAE).
             ``beta = 1`` yields the standard VAE. Defaults to 1.
+        likelihood : str | LikelihoodType, optional
+            Likelihood model for the reconstruction term
+            (``'gaussian'`` or ``'bernoulli'``). Defaults to Gaussian.
 
         Returns
         -------
@@ -325,22 +310,40 @@ class AdaGVAEOutput(ModelOutput):
     output1: VAEOutput
     output2: VAEOutput
 
-class AdaGVAE(VAE):
-    r"""Adaptive Group Variational Autoencoder (Ada-GVAE), from Locatello et al. (2020).
+class AdaGVAE(nn.Module):
+    """Adaptive Group Variational Autoencoder (Ada-GVAE), from Locatello et al. (2020).
 
-    This class extends :class:`VAE` and enables feature disentanglement in the latent space
-    through adaptive posterior grouping.
+    Wraps a :class:`VAE` and adds adaptive posterior grouping for feature disentanglement.
+    All VAE parameters are tracked through this wrapper.
 
-    During training, :meth:`forward` expects a pair of inputs ``(x1, x2)`` and returns an
-    :class:`AdaGVAEOutput` containing the adapted latent representations for both.
-    After training, :meth:`forward` operates on single images exactly like a standard VAE,
-    returning a :class:`VAEOutput`.
-
-    :meth:`compute_loss` mirrors this: when given an :class:`AdaGVAEOutput` it computes the
-    combined pair ELBO; when given a :class:`VAEOutput` it falls back to the standard ELBO.
+    :meth:`forward` expects a pair of inputs ``(x1, x2)`` and returns an
+    :class:`AdaGVAEOutput` with adapted latent representations for both.
+    For single-image inference after training, use ``model.vae.encode`` and
+    ``model.vae.decode`` directly.
     """
 
-    _GUARDED = {"_encode_pair"}
+    def __init__(self, vae: VAE):
+        """Wrap a VAE with adaptive posterior grouping.
+
+        Parameters
+        ----------
+        vae : VAE
+            A configured :class:`VAE` instance whose encoder, decoder, and sampling
+            layer are reused for the paired training objective.
+        """
+        super().__init__()
+        self.vae = vae
+
+    def build(self, input_sample: torch.Tensor) -> None:
+        """Materialize lazy layers by delegating to the wrapped VAE's build step.
+
+        Parameters
+        ----------
+        input_sample : torch.Tensor
+            A representative input batch passed to :meth:`VAE.build`.
+            Only the shape matters; values are not used.
+        """
+        self.vae.build(input_sample)
 
     def _encode_pair(self, x1: torch.Tensor, x2: torch.Tensor, S: int = 1) -> tuple[VAEEncodeOutput, VAEEncodeOutput]:
         r"""Encode a pair of inputs with adaptive posterior alignment.
@@ -361,8 +364,8 @@ class AdaGVAE(VAE):
             First input batch of shape ``[B, ...]``.
         x2 : torch.Tensor
             Second input batch of shape ``[B, ...]``.
-        S : int
-            Number of latent samples per input.
+        S : int, optional
+            Number of latent samples per input. Defaults to 1.
 
         Returns
         -------
@@ -376,11 +379,11 @@ class AdaGVAE(VAE):
         Notes
         -----
         The thresholding mechanism promotes learning of shared latent factors
-        while allowing independent variation for high-divergence dimensions. 
+        while allowing independent variation for high-divergence dimensions.
         This encourages disentanglement and structured representations.
         """
-        mu1, log_var1 = self.sampling_layer.get_params(self.encoder(x1))
-        mu2, log_var2 = self.sampling_layer.get_params(self.encoder(x2))
+        mu1, log_var1 = self.vae.sampling_layer.get_params(self.vae.encoder(x1))
+        mu2, log_var2 = self.vae.sampling_layer.get_params(self.vae.encoder(x2))
 
         # KL(q1||q2) -> [B, latents]
         kl_q1_q2 = kl_divergence_diag_gaussian(mu1, log_var1, mu2, log_var2, reduce_sum=False)
@@ -401,27 +404,26 @@ class AdaGVAE(VAE):
         log_var_tilde1 = torch.where(mask, log_var_mean, log_var1)
         log_var_tilde2 = torch.where(mask, log_var_mean, log_var2)
 
-        z1 = self.sampling_layer._reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
-        z2 = self.sampling_layer._reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
+        z1 = self.vae.sampling_layer._reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
+        z2 = self.vae.sampling_layer._reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
 
         return (
             VAEEncodeOutput(z=z1, mu=mu_tilde1, log_var=log_var_tilde1),
             VAEEncodeOutput(z=z2, mu=mu_tilde2, log_var=log_var_tilde2),
         )
 
-
     def forward(self, x: tuple[torch.Tensor, torch.Tensor], S: int = 1) -> AdaGVAEOutput:
         """AdaGVAE training pass on a pair of images.
 
-        For single-image inference after training use the inherited :meth:`encode`
-        and :meth:`decode` methods.
+        For single-image inference after training use ``model.vae.encode``
+        and ``model.vae.decode``.
 
         Parameters
         ----------
         x : tuple[torch.Tensor, torch.Tensor]
             A ``(x1, x2)`` pair, each of shape ``[B, ...]``.
-        S : int
-            Number of latent samples for Monte Carlo estimates.
+        S : int, optional
+            Number of latent samples for Monte Carlo estimates. Defaults to 1.
 
         Returns
         -------
@@ -431,8 +433,8 @@ class AdaGVAE(VAE):
         """
         x1, x2 = x
         x1_enc, x2_enc = self._encode_pair(x1, x2, S=S)
-        x1_dec = self._decode(x1_enc.z)
-        x2_dec = self._decode(x2_enc.z)
+        x1_dec = self.vae._decode(x1_enc.z)
+        x2_dec = self.vae._decode(x2_enc.z)
         return AdaGVAEOutput(
             output1=VAEOutput(x_hat=x1_dec.x_hat, z=x1_enc.z, mu=x1_enc.mu, log_var=x1_enc.log_var),
             output2=VAEOutput(x_hat=x2_dec.x_hat, z=x2_enc.z, mu=x2_enc.mu, log_var=x2_enc.log_var),
@@ -461,19 +463,28 @@ class AdaGVAE(VAE):
             Output from :meth:`forward` called in training mode.
         beta : float, optional
             KL weighting factor. ``beta = 1`` yields the standard objective.
+            Defaults to 1.
         likelihood : str | LikelihoodType, optional
-            Likelihood model for the reconstruction term (``'gaussian'`` or ``'bernoulli'``).
+            Likelihood model for the reconstruction term (``'gaussian'`` or
+            ``'bernoulli'``). Defaults to Gaussian.
 
         Returns
         -------
         LossResult
-            Objective is sum of negative ELBOs; diagnostics include
-            ``"elbo"``, ``"log_likelihood_x1"``, ``"log_likelihood_x2"``,
-            ``"kl_divergence_x1"``, ``"kl_divergence_x2"``.
+            Result containing:
+
+            * **objective** – Sum of negative ELBOs for both inputs (scalar).
+            * **diagnostics** – Dictionary with:
+
+              - ``"elbo"``: Sum of mean ELBOs for both inputs.
+              - ``"log_likelihood_x1"``: Mean reconstruction term for ``x1``.
+              - ``"log_likelihood_x2"``: Mean reconstruction term for ``x2``.
+              - ``"kl_divergence_x1"``: Mean KL divergence for ``x1``.
+              - ``"kl_divergence_x2"``: Mean KL divergence for ``x2``.
         """
         x1, x2 = x
-        loss1 = super().compute_loss(x=x1, vae_output=vae_output.output1, beta=beta, likelihood=likelihood)
-        loss2 = super().compute_loss(x=x2, vae_output=vae_output.output2, beta=beta, likelihood=likelihood)
+        loss1 = self.vae.compute_loss(x=x1, vae_output=vae_output.output1, beta=beta, likelihood=likelihood)
+        loss2 = self.vae.compute_loss(x=x2, vae_output=vae_output.output2, beta=beta, likelihood=likelihood)
         return LossResult(
             objective=loss1.objective + loss2.objective,
             diagnostics={

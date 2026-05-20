@@ -92,7 +92,7 @@ optimizer = torch.optim.Adam(vae.parameters())
 for x in dataloader:
     optimizer.zero_grad()
     out = vae(x)
-    loss_results = vae.compute_loss(out, x, beta=1, likelihood='bernoulli')
+    loss_results = vae.compute_loss(x, out, beta=1, likelihood='bernoulli')
     loss_results.objective.backward() # negative ELBO
     optimizer.step()
     # optional: log components

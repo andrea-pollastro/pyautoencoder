@@ -16,8 +16,7 @@ author = 'Andrea Pollastro'
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",      # for NumPy/Google docstrings
-    "sphinx.ext.autodoc.typehints",
-    "sphinx.ext.mathjax",       # ← add this
+    "sphinx.ext.mathjax",
 ]
 
 templates_path = ['_templates']

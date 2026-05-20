@@ -64,10 +64,9 @@ Train a simple autoencoder on MNIST:
     loss_results.objective.backward()
     optimizer.step()
 
-    # Inference on z and x_hat (no gradients)
-    with torch.no_grad():
-        z = model.encode(x_batch)
-        x_hat = model.decode(z)
+    # encode/decode run under inference_mode automatically
+    z = model.encode(x_batch).z       # AEEncodeOutput → latent tensor
+    x_hat = model.decode(z).x_hat     # AEDecodeOutput → reconstruction tensor
 
 Variational Autoencoder (VAE)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

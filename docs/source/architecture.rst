@@ -9,8 +9,10 @@ fundamental autoencoder architectures:
 
 1. **Autoencoder (AE)** – Vanilla encoder-decoder pair
 2. **Variational Autoencoder (VAE)** – Probabilistic encoder with sampling
+3. **Adaptive Group VAE (AdaGVAE)** – Paired-input VAE for disentangled representations
 
-Both follow consistent interfaces and integrate naturally with PyTorch.
+All follow a consistent build/forward/compute_loss pattern and integrate naturally with
+PyTorch. AdaGVAE extends the VAE interface for paired inputs.
 
 Vanilla Autoencoder (AE)
 ------------------------
@@ -42,10 +44,10 @@ The :class:`~pyautoencoder.vanilla.AE` is a deterministic encoder-decoder model:
 .. code-block:: python
 
     # Extract latent codes
-    z = model.encode(x_batch)
+    z = model.encode(x_batch).z              # AEEncodeOutput → latent tensor
 
     # Reconstruct from latents
-    x_reconstructed = model.decode(z)
+    x_reconstructed = model.decode(z).x_hat  # AEDecodeOutput → reconstruction tensor
 
 **Output Structure**
 
@@ -114,6 +116,70 @@ Generate samples from the prior :math:`p(z) = \mathcal{N}(0, I)`:
         z_prior = torch.randn(n_samples, latent_dim)
         x_samples = model.decoder(z_prior)
 
+
+Adaptive Group Variational Autoencoder (AdaGVAE)
+-------------------------------------------------
+
+The :class:`~pyautoencoder.variational.AdaGVAE` implements the Ada-GVAE framework
+(Locatello et al., 2020). It wraps a :class:`~pyautoencoder.variational.VAE` and
+adds an adaptive posterior-alignment step during training to encourage disentanglement.
+
+**Architecture**
+
+- **Backbone** – A fully configured :class:`~pyautoencoder.variational.VAE`
+  (encoder, sampling layer, decoder are reused)
+- **Paired encoding** – Both inputs :math:`x_1` and :math:`x_2` are encoded
+  independently to obtain :math:`q_1(z|x_1)` and :math:`q_2(z|x_2)`
+- **Adaptive alignment** – Dimensions where the per-dimension KL divergence
+  :math:`\mathrm{KL}(q_1 \| q_2)` falls below a threshold :math:`\tau` are
+  *shared* (posterior averaged); the rest are kept independent
+- **Decoder** – The standard VAE decoder is applied to samples from the adapted
+  posteriors
+
+The threshold is computed per sample as the midpoint of the min and max
+per-dimension KL values:
+
+.. math::
+
+    \tau = \tfrac{1}{2}(\max_d \mathrm{KL}_d + \min_d \mathrm{KL}_d)
+
+**Training**
+
+.. code-block:: python
+
+    from pyautoencoder.variational import VAE, AdaGVAE
+
+    vae = VAE(encoder=encoder_nn, decoder=decoder_nn, latent_dim=64)
+    model = AdaGVAE(vae=vae)
+    model.build(sample_input)
+
+    # Training step — forward takes a pair
+    output = model((x1_batch, x2_batch), S=5)
+    loss_result = model.compute_loss((x1_batch, x2_batch), output, beta=4.0, likelihood='bernoulli')
+    loss_result.objective.backward()
+
+**Inference**
+
+After training, AdaGVAE reuses the underlying VAE for single-image inference:
+
+.. code-block:: python
+
+    # Encode / decode through the wrapped VAE as usual
+    z = model.vae.encode(x).z
+    x_reconstructed = model.vae.decode(z).x_hat
+
+**Output Structure**
+
+.. code-block:: python
+
+    class AdaGVAEOutput:
+        output1: VAEOutput    # Adapted output for x1
+        output2: VAEOutput    # Adapted output for x2
+
+Each :class:`~pyautoencoder.variational.VAEOutput` contains ``x_hat``, ``z``,
+``mu``, and ``log_var`` for the corresponding adapted posterior.
+
+
 Loss Functions
 --------------
 
@@ -172,10 +238,37 @@ The :math:`\beta` hyperparameter controls the KL weight:
 - :math:`\beta > 1.0` – Stronger regularization (more disentangled latents)
 - :math:`\beta < 1.0` – Weaker regularization (better reconstruction)
 
+Paired ELBO Loss (AdaGVAE)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For AdaGVAE, use :meth:`AdaGVAE.compute_loss` to compute the combined objective
+over the pair:
+
+.. code-block:: python
+
+    output = model((x1, x2), S=5)
+    loss_result = model.compute_loss((x1, x2), output, beta=4.0, likelihood='bernoulli')
+    loss_result.objective.backward()
+
+The loss is the sum of two independent beta-VAE ELBOs, each evaluated on the
+adapted posteriors :math:`q(\hat{z}|x_1)` and :math:`q(\hat{z}|x_2)`:
+
+.. math::
+
+    \mathcal{L}(x_1, x_2; \beta)
+        = \Bigl[\mathbb{E}_{q(\hat{z}|x_1)}[\log p(x_1|\hat{z})]
+          - \beta\,\mathrm{KL}(q(\hat{z}|x_1)\|p(\hat{z}))\Bigr]
+        + \Bigl[\mathbb{E}_{q(\hat{z}|x_2)}[\log p(x_2|\hat{z})]
+          - \beta\,\mathrm{KL}(q(\hat{z}|x_2)\|p(\hat{z}))\Bigr]
+
+The diagnostics dictionary exposes per-input reconstruction and KL terms
+(``log_likelihood_x1``, ``log_likelihood_x2``, ``kl_divergence_x1``,
+``kl_divergence_x2``) so both views can be monitored independently.
+
 **Loss Result Structure**
 
-Both :meth:`AE.compute_loss` and :meth:`VAE.compute_loss` return a 
-:class:`~pyautoencoder.loss.LossResult` with:
+:meth:`AE.compute_loss`, :meth:`VAE.compute_loss`, and :meth:`AdaGVAE.compute_loss`
+all return a :class:`~pyautoencoder.loss.LossResult` with:
 
 - **objective** – scalar loss to optimize (backward-differentiable)
 - **diagnostics** – dictionary of scalar metrics (float values)

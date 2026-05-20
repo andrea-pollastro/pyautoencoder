@@ -17,5 +17,3 @@ Data Structures & Types
    :no-index:
 
 .. autoclass:: pyautoencoder.loss.LikelihoodType
-   :members:
-   :undoc-members:

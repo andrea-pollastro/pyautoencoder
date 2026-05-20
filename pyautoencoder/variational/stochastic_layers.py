@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from .._base.base import NotBuiltError
 
 class FullyFactorizedGaussian(nn.Module):
     r"""Gaussian posterior head producing a fully factorized :math:`q(z \mid x)`.
@@ -17,64 +16,23 @@ class FullyFactorizedGaussian(nn.Module):
 
     The build step infers ``F`` and lazily constructs the linear layers
     ``mu`` and ``log_var``.
-
-    Parameters
-    ----------
-    latent_dim : int
-        Dimensionality of the latent space ``z``.
     """
 
     def __init__(self, latent_dim: int):
-        super().__init__()
-        self.latent_dim = latent_dim
-        self.mu: nn.Linear | None = None
-        self.log_var: nn.Linear | None = None
-        self._built = False
-
-    def build(self, input_sample: torch.Tensor) -> None:
-        """Initialize the linear layers using a representative input sample.
-
-        This method infers the input feature dimension ``F`` from a tensor of
-        shape ``[B, F]`` and constructs:
-
-        * ``mu`` – a linear layer mapping ``F → latent_dim``.
-        * ``log_var`` – a linear layer mapping ``F → latent_dim``.
-
-        The method is idempotent as long as subsequent inputs have the same
-        feature dimension.
+        """Construct a Gaussian posterior head.
 
         Parameters
         ----------
-        input_sample : torch.Tensor
-            Tensor of shape ``[B, F]`` used to infer ``F`` and initialize the
-            corresponding linear layers.
-
-        Raises
-        ------
-        TypeError
-            If ``input_sample`` is not a tensor.
-        ValueError
-            If the tensor does not have shape ``[B, F]`` or if ``F <= 0``.
+        latent_dim : int
+            Dimensionality of the latent space ``z``.
         """
-
-        if not isinstance(input_sample, torch.Tensor):
-            raise TypeError("build(x) expects a torch.Tensor.")
-        if input_sample.ndim != 2:
-            raise ValueError(f"build(x): expected shape [B, F], got {tuple(input_sample.shape)}. Flatten upstream.")
-        if input_sample.shape[1] == 0:
-            raise ValueError("build(x): F (feature dimension) must be > 0.")
-        
-        in_features = int(input_sample.shape[1])
-
-        self.mu = nn.Linear(in_features, self.latent_dim)
-        self.log_var = nn.Linear(in_features, self.latent_dim)
-        self.to(device=input_sample.device, dtype=input_sample.dtype)
-
-        self.in_features = in_features
-        self._built = True
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.mu = nn.LazyLinear(out_features=latent_dim)
+        self.log_var = nn.LazyLinear(out_features=latent_dim)
 
     def get_params(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        r"""Compute posterior parameters without drawing samples.
+        """Compute posterior parameters without drawing samples.
 
         Parameters
         ----------
@@ -85,15 +43,8 @@ class FullyFactorizedGaussian(nn.Module):
         -------
         tuple[torch.Tensor, torch.Tensor]
             ``(mu, log_var)``, each of shape ``[B, latent_dim]``.
-
-        Raises
-        ------
-        NotBuiltError
-            If the module has not been built.
         """
 
-        if not self._built:
-            raise NotBuiltError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
         return self.mu(x), self.log_var(x)  # type: ignore
 
     def forward(self, x: torch.Tensor, S: int = 1) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -129,19 +80,15 @@ class FullyFactorizedGaussian(nn.Module):
 
         Raises
         ------
-        NotBuiltError
-            If the module has not been built.
         ValueError
             If ``S < 1``.
         """
 
-        if not self._built:
-            raise NotBuiltError("FullyFactorizedGaussian not built. Call `.build(x)` first.")
         if S < 1:
             raise ValueError("S must be >= 1.")
 
-        mu = self.mu(x)            # type: ignore               # [B, Dz]
-        log_var = self.log_var(x)  # type: ignore               # [B, Dz]
+        mu = self.mu(x)             # [B, Dz]
+        log_var = self.log_var(x)   # [B, Dz]
 
         if self.training:
             z = self._reparametrize(mu=mu, log_var=log_var, S=S) # [B, S, Dz]
@@ -179,15 +126,3 @@ class FullyFactorizedGaussian(nn.Module):
         z = mu_e + std_e * eps                      # [B, S, Dz]
         return z
     
-    @property
-    def built(self) -> bool:
-        """Whether the module has been successfully built.
-
-        Returns
-        -------
-        bool
-            ``True`` if :meth:`build` has been called and the internal layers have
-            been initialized, ``False`` otherwise.
-        """
-
-        return self._built

@@ -37,9 +37,10 @@ class AEOutput(ModelOutput):
     Attributes
     ----------
     x_hat : torch.Tensor
-        Reconstruction (or logits) of shape ``[B, ...]``.
+        Reconstruction (or logits) of shape ``[B, ...]`` produced by
+        :meth:`AE.forward`.
     z : torch.Tensor
-        Latent code of shape ``[B, ...]``.
+        Latent code of shape ``[B, ...]`` produced by :meth:`AE.forward`.
     """
 
     x_hat: torch.Tensor
@@ -54,7 +55,8 @@ class AE(BaseAutoencoder):
     * ``_decode(z)`` – maps latent codes ``z`` to reconstructions ``x_hat``.
     * ``forward(x)`` – full training forward pass returning both ``z`` and ``x_hat``.
 
-    The encoder and decoder are arbitrary :class:`torch.nn.Module` instances.
+    The encoder and decoder are arbitrary :class:`torch.nn.Module` instances that
+    define the mapping between data space and latent space.
     """
 
     def __init__(self, encoder: nn.Module, decoder: nn.Module):
@@ -126,21 +128,6 @@ class AE(BaseAutoencoder):
         dec = self._decode(enc.z)  # AEDecodeOutput(x_hat)
         return AEOutput(x_hat=dec.x_hat, z=enc.z)
     
-    def build(self, input_sample: torch.Tensor) -> None:
-        """Build the Autoencoder using a representative input.
-
-        For vanilla Autoencoders with fixed-size encoder and decoder modules,
-        no size-dependent initialization is required, so this method simply sets
-        ``self._built = True``.
-
-        Parameters
-        ----------
-        input_sample : torch.Tensor
-            Representative input tensor (ignored).
-        """
-
-        self._built = True
-
     def compute_loss(self, 
                      x: torch.Tensor,
                      ae_output: AEOutput,
@@ -161,8 +148,8 @@ class AE(BaseAutoencoder):
             - ``z`` (torch.Tensor): Latent representation (unused by this method).
 
         likelihood : str | LikelihoodType, optional
-            Likelihood model for computing the reconstruction term.
-            Can be 'gaussian' or 'bernoulli'. Defaults to Gaussian.
+            Likelihood model for computing the reconstruction term
+            (``'gaussian'`` or ``'bernoulli'``). Defaults to Gaussian.
 
         Returns
         -------
@@ -172,15 +159,14 @@ class AE(BaseAutoencoder):
             * **objective** – Scalar batch-mean reconstruction NLL (in nats).
             * **diagnostics** – Dictionary with:
 
-              - ``"log_likelihood"``: 
-                  Negative of the objective (batch-mean log-likelihood).
+              - ``"log_likelihood"``: Negative of the objective (batch-mean log-likelihood).
 
         Notes
         -----
         Reductions follow:
         
-        1. Elementwise log-likelihood
-        2. Sum over feature dimensions
+        1. Elementwise log-likelihood.
+        2. Sum over feature dimensions.
         3. Mean over the batch.
 
         Ensure that inputs match the chosen likelihood:
