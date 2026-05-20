@@ -1,8 +1,7 @@
-from . import loss, vanilla, variational, sparse
+from . import loss, vanilla, variational
 
 __all__ = [
     "loss",
     "vanilla",
     "variational",
-    "sparse",
 ]
