@@ -84,22 +84,32 @@ The :class:`~pyautoencoder.variational.VAE` implements the VAE framework
     loss_result = model.compute_loss(x_batch, output, beta=1.0, likelihood='gaussian')
     loss_result.objective.backward()
 
-**Training vs Evaluation**
+**Sampling vs Posterior Mean**
 
-- **Training mode** (:code:`model.train()`):
+Whether :math:`z` is sampled is chosen with the ``sample`` argument, not with
+:code:`model.train()` / :code:`model.eval()` (which only affect layers such as
+dropout and batch normalization):
 
-  - Samples :math:`S` latent codes per input
-  - Enables Monte Carlo averaging of reconstruction loss
-  - Returns shape :math:`[B, S, D_z]` for latents
+- :code:`model(x, S=5)` – samples :math:`S` latent codes per input
+  (``sample=True`` is the default of ``forward``, in train and eval mode alike).
+  ``compute_loss`` on this output is a Monte Carlo estimate of the ELBO, also
+  for validation data.
+- :code:`model.encode(x)` – inference: no gradients and :math:`z = \mu` by
+  default (``sample=False``), with shape :math:`[B, 1, D_z]`. Use
+  :code:`model.encode(x, S=10, sample=True)` to draw samples instead.
+- :code:`model(x, sample=False)` – :math:`z = \mu` in the full forward pass.
+  ``S`` must be 1 in this case.
 
-- **Evaluation mode** (:code:`model.eval()`):
+.. code-block:: python
 
-  - Deterministic output (uses means, no sampling)
-  - Faster inference
-  - Still computes :math:`\mu` and :math:`\log\sigma^2` for diagnostics
-  - The ``elbo`` diagnostic is evaluated at :math:`z = \mu`, so it is not a
-    Monte Carlo ELBO estimate. To estimate the ELBO on held-out data, run the
-    forward pass in train mode under :func:`torch.no_grad`.
+    # Validation ELBO (e.g. for early stopping)
+    model.eval()
+    with torch.no_grad():
+        val_loss = model.compute_loss(x_val, model(x_val))
+
+    # Inference: posterior mean and deterministic reconstruction
+    enc = model.encode(x)
+    x_rec = model.decode(enc.z).x_hat
 
 **Output Structure**
 
@@ -149,8 +159,8 @@ per-dimension KL values:
     \tau = \tfrac{1}{2}(\max_d \mathrm{KL}_d + \min_d \mathrm{KL}_d)
 
 The alignment only affects training. In eval mode (:code:`model.eval()`) no
-grouping is applied: each input goes through the wrapped VAE independently,
-with :math:`z = \mu`.
+grouping is applied: each input goes through the wrapped VAE's ``forward``
+independently.
 
 **Training**
 

@@ -71,6 +71,9 @@ class BaseAutoencoder(nn.Module, ABC):
     * :meth:`encode` – calls :meth:`_encode` without tracking gradients.
     * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
 
+    Subclasses may override them to set inference-friendly defaults (for
+    example :meth:`VAE.encode` returns the posterior mean by default).
+
     Build step
     ----------
     :meth:`build` performs a no-grad forward pass with a representative input
@@ -218,8 +221,8 @@ class BaseAutoencoder(nn.Module, ABC):
         optimizer or applying a custom weight initialization.
 
         The pass runs in eval mode, so it does not update BatchNorm running
-        statistics and does not apply dropout or latent sampling. The
-        train/eval mode of every submodule is restored afterwards.
+        statistics and does not apply dropout. The train/eval mode of every
+        submodule is restored afterwards.
 
         Parameters
         ----------

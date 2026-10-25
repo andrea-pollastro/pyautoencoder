@@ -113,9 +113,7 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
 # ---------------- Evaluation ----------------- #
 @torch.no_grad()
 def average_elbo(dataloader: DataLoader, model: VAE) -> float:
-    # The ELBO needs samples z ~ q(z|x), but in eval mode the VAE uses z = mu.
-    # This model has no dropout or batch norm, so train mode only enables sampling.
-    model.train()
+    model.eval()  # forward still samples z ~ q(z|x), so this is an ELBO estimate
     total_elbo = torch.zeros((), device=DEVICE)
     n = 0
 

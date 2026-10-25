@@ -11,8 +11,9 @@ class FullyFactorizedGaussian(nn.Module):
 
         q(z \mid x) = \mathcal{N}(z \mid \mu(x), \operatorname{diag}(\sigma(x)^2)),
 
-    and (optionally) samples ``S`` latent draws via the reparameterization
-    trick during training.
+    and either ``S`` latent samples drawn via the reparameterization trick
+    (``sample=True``, the default) or the posterior mean (``sample=False``).
+    The choice is explicit and does not depend on train/eval mode.
 
     The build step infers ``F`` and lazily constructs the linear layers
     ``mu`` and ``log_var``.
@@ -53,50 +54,65 @@ class FullyFactorizedGaussian(nn.Module):
         self._check_features(x)
         return self.mu(x), self.log_var(x)  # type: ignore
 
-    def forward(self, x: torch.Tensor, S: int = 1) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        r"""Compute parameters and (optionally) samples from the Gaussian posterior.
+    def forward(
+        self, x: torch.Tensor, S: int = 1, sample: bool = True
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        r"""Compute the posterior parameters and the latent codes ``z``.
 
-        During training, this method returns ``S`` Monte Carlo samples using the
-        reparameterization trick:
+        With ``sample=True`` (default), ``z`` holds ``S`` Monte Carlo samples
+        drawn with the reparameterization trick (see :meth:`reparametrize`):
 
         .. math::
 
             z^{(s)} = \mu + \sigma \odot \epsilon^{(s)},
             \qquad \epsilon^{(s)} \sim \mathcal{N}(0, I).
 
-        During evaluation (``model.eval()``), deterministic output is returned
-        with ``z`` equal to the repeated mean.
+        With ``sample=False``, ``z`` is the posterior mean ``mu``, with a
+        single sample dimension (``S`` must be ``1``).
+
+        The behavior does not depend on train/eval mode.
 
         Parameters
         ----------
         x : torch.Tensor
             Input tensor of shape ``[B, F]``.
         S : int, optional
-            Number of Monte Carlo samples to generate. Must be ``>= 1``.
-            Defaults to ``1`` (single sample).
+            Number of Monte Carlo samples to generate. Must be ``>= 1``, and
+            ``1`` when ``sample=False``. Defaults to ``1``.
+        sample : bool, optional
+            Whether to sample ``z`` from :math:`q(z \mid x)` (``True``) or to
+            return its mean (``False``). Defaults to ``True``.
 
         Returns
         -------
         tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             ``(z, mu, log_var)``, where:
 
-            * ``z`` – sampled or repeated latent codes, shape ``[B, S, latent_dim]``.
+            * ``z`` – latent codes, shape ``[B, S, latent_dim]``
+              (``[B, 1, latent_dim]`` when ``sample=False``).
             * ``mu`` – mean of :math:`q(z \mid x)`, shape ``[B, latent_dim]``.
             * ``log_var`` – log-variance of :math:`q(z \mid x)`, shape ``[B, latent_dim]``.
 
         Raises
         ------
         ValueError
-            If ``S < 1`` or if ``x`` is not of shape ``[B, F]``.
+            If ``S < 1``, if ``S != 1`` with ``sample=False``, or if ``x`` is
+            not of shape ``[B, F]``.
         """
 
         _check_num_samples(S)
+        if not sample and S != 1:
+            raise ValueError(
+                f"S = {S} Monte Carlo samples were requested with sample=False. "
+                "Without sampling z is the posterior mean, so S must be 1; "
+                "pass sample=True to draw S samples."
+            )
         mu, log_var = self.get_params(x)  # [B, Dz] each
 
-        if self.training:
+        if sample:
             z = self.reparametrize(mu=mu, log_var=log_var, S=S)  # [B, S, Dz]
         else:
-            z = mu.unsqueeze(1).expand(-1, S, -1)               # [B, S, Dz]
+            z = mu.unsqueeze(1)                                  # [B, 1, Dz]
 
         return z, mu, log_var
 
@@ -108,10 +124,10 @@ class FullyFactorizedGaussian(nn.Module):
             z^{(s)} = \mu + \sigma \odot \epsilon^{(s)},
             \qquad \epsilon^{(s)} \sim \mathcal{N}(0, I).
 
-        Unlike :meth:`forward`, this method always samples, regardless of
-        train/eval mode. It is differentiable with respect to ``mu`` and
-        ``log_var``, so it can be used on posterior parameters computed
-        elsewhere (for example the adapted posteriors of :class:`AdaGVAE`).
+        This method always samples. It is differentiable with respect to
+        ``mu`` and ``log_var``, so it can be used on posterior parameters
+        computed elsewhere (for example the adapted posteriors of
+        :class:`AdaGVAE`).
 
         Parameters
         ----------

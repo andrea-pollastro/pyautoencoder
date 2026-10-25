@@ -83,10 +83,8 @@ ELBO Evaluation
 We evaluate the ELBO over a dataloader by summing the batch-wise ELBO
 diagnostics returned by :meth:`VAE.compute_loss`.
 
-The evaluation runs in train mode (under :func:`torch.no_grad`), because the
-ELBO is an expectation over samples :math:`z \sim q(z \mid x)`, while in eval
-mode the VAE uses :math:`z = \mu`. This is safe here because the model has no
-dropout or batch normalization layers.
+The forward pass samples :math:`z \sim q(z \mid x)` also in eval mode, so the
+returned ``elbo`` is a Monte Carlo estimate of the ELBO on the evaluated data.
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python

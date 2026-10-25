@@ -74,8 +74,29 @@ class VAE(BaseAutoencoder):
     * a fully factorized Gaussian head producing ``(z, mu, log_var)``,
     * a decoder mapping latent samples ``z → x_hat``.
 
-    Training uses Monte Carlo samples ``z`` for the reparameterization trick;
-    evaluation mode returns deterministic repeated means.
+    Sampling is controlled explicitly by the ``sample`` argument, not by
+    train/eval mode (which only affects layers such as dropout and batch
+    normalization):
+
+    * :meth:`forward` / :meth:`_encode` sample ``z`` from :math:`q(z \mid x)`
+      by default (``sample=True``), as needed for training and for estimating
+      the ELBO, also on validation data.
+    * :meth:`encode` returns the posterior mean ``z = mu`` by default
+      (``sample=False``), as usually needed at inference time.
+
+    Example
+    -------
+    .. code-block:: python
+
+        out = vae(x, S=5)                     # training: 5 samples per input
+        loss = vae.compute_loss(x, out)
+
+        vae.eval()
+        with torch.no_grad():                 # validation ELBO
+            val = vae.compute_loss(x_val, vae(x_val))
+
+        enc = vae.encode(x)                   # inference: z = mu, [B, 1, D_z]
+        x_rec = vae.decode(enc.z).x_hat       # deterministic reconstruction
 
     Shape convention
     ----------------
@@ -122,8 +143,8 @@ class VAE(BaseAutoencoder):
         self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
 
     # --- training-time hooks required by BaseAutoencoder ---
-    def _encode(self, x: torch.Tensor, S: int = 1) -> VAEEncodeOutput:
-        r"""Encode inputs and draw Monte Carlo latent samples.
+    def _encode(self, x: torch.Tensor, S: int = 1, sample: bool = True) -> VAEEncodeOutput:
+        r"""Encode inputs into posterior parameters and latent codes ``z``.
 
         Parameters
         ----------
@@ -131,7 +152,11 @@ class VAE(BaseAutoencoder):
             Input batch of shape ``[B, ...]``. The encoder must output a flat
             feature vector per sample, of shape ``[B, F]``.
         S : int, optional
-            Number of latent samples per input. Must be ``>= 1``. Defaults to 1.
+            Number of latent samples per input. Must be ``>= 1``, and ``1``
+            when ``sample=False``. Defaults to 1.
+        sample : bool, optional
+            Whether to sample ``z`` from :math:`q(z \mid x)` (``True``) or to
+            use the posterior mean ``z = mu`` (``False``). Defaults to ``True``.
 
         Returns
         -------
@@ -142,19 +167,41 @@ class VAE(BaseAutoencoder):
         Raises
         ------
         ValueError
-            If ``S < 1`` or if the encoder output is not of shape ``[B, F]``.
-
-        Notes
-        -----
-        The sampling layer behaves as:
-
-        * ``train()`` – sample from ``q(z \mid x)``.
-        * ``eval()`` – return tiled means for deterministic evaluation.
+            If ``S < 1``, if ``S != 1`` with ``sample=False``, or if the
+            encoder output is not of shape ``[B, F]``.
         """
 
         f = self.encoder(x)
-        z, mu, log_var = self.sampling_layer(f, S=S)
+        z, mu, log_var = self.sampling_layer(f, S=S, sample=sample)
         return VAEEncodeOutput(z=z, mu=mu, log_var=log_var)
+
+    @torch.inference_mode()
+    def encode(self, x: torch.Tensor, S: int = 1, sample: bool = False) -> VAEEncodeOutput:
+        r"""Encode inputs without tracking gradients (inference API).
+
+        Same as :meth:`_encode` under :func:`torch.inference_mode`, but with
+        an inference-friendly default: ``z`` is the posterior mean
+        (``sample=False``). Pass ``sample=True`` to draw ``S`` samples.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input batch of shape ``[B, ...]``.
+        S : int, optional
+            Number of latent samples per input; must be ``1`` unless
+            ``sample=True``. Defaults to 1.
+        sample : bool, optional
+            Whether to sample ``z`` from :math:`q(z \mid x)`. Defaults to
+            ``False`` (``z = mu``).
+
+        Returns
+        -------
+        VAEEncodeOutput
+            Contains ``z`` of shape ``[B, S, D_z]`` (``[B, 1, D_z]`` by
+            default), and ``mu`` and ``log_var`` of shape ``[B, D_z]``.
+        """
+
+        return self._encode(x, S=S, sample=sample)
 
     def _decode(self, z: torch.Tensor) -> VAEDecodeOutput:
         """Decode latent variables into reconstructions.
@@ -190,15 +237,20 @@ class VAE(BaseAutoencoder):
         x_hat = x_hat_flat.reshape(B, S, *x_hat_flat.shape[1:])
         return VAEDecodeOutput(x_hat=x_hat)
 
-    def forward(self, x: torch.Tensor, S: int = 1) -> VAEOutput:
-        """Full VAE pass: encode, sample ``S`` times, decode.
+    def forward(self, x: torch.Tensor, S: int = 1, sample: bool = True) -> VAEOutput:
+        r"""Full VAE pass: encode, sample ``S`` times, decode.
 
         Parameters
         ----------
         x : torch.Tensor
             Input batch of shape ``[B, ...]``.
         S : int, optional
-            Number of latent samples for Monte Carlo estimates. Defaults to 1.
+            Number of latent samples for Monte Carlo estimates. Must be
+            ``1`` when ``sample=False``. Defaults to 1.
+        sample : bool, optional
+            Whether to sample ``z`` from :math:`q(z \mid x)` (``True``) or to
+            use the posterior mean ``z = mu`` (``False``). Defaults to ``True``,
+            in both train and eval mode.
 
         Returns
         -------
@@ -213,7 +265,7 @@ class VAE(BaseAutoencoder):
         the decoder must output logits.
         """
 
-        enc = self._encode(x, S=S)
+        enc = self._encode(x, S=S, sample=sample)
         dec = self._decode(enc.z)
         return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)
 
@@ -287,12 +339,10 @@ class VAE(BaseAutoencoder):
         -----
         - All returned diagnostics are **batch means**.
         - Gradients flow through the decoder; neither input is detached.
-        - In eval mode the sampling layer returns ``z = mu`` (no sampling),
-          so the reconstruction term is evaluated at the posterior mean and
-          ``"elbo"`` is **not** a Monte Carlo estimate of the ELBO. To
-          estimate the ELBO on held-out data, run the forward pass in train
-          mode under :func:`torch.no_grad` (taking care of dropout and batch
-          normalization layers, which also depend on the mode).
+        - ``"elbo"`` is a Monte Carlo estimate of the ELBO only if ``output``
+          was computed with ``sample=True`` (the default of :meth:`forward`,
+          also in eval mode). With ``sample=False`` the reconstruction term is
+          evaluated at ``z = mu``, which is not an ELBO estimate.
         """
         x_hat = output.x_hat
         mu = output.mu
@@ -359,7 +409,7 @@ class AdaGVAE(nn.Module):
     :meth:`forward` expects a pair of inputs ``(x1, x2)`` and returns an
     :class:`AdaGVAEOutput` for both. The adaptive grouping only changes
     training: in eval mode no grouping is applied and AdaGVAE behaves as the
-    wrapped VAE, encoding each input independently with ``z = mu``.
+    wrapped VAE, passing each input independently through :meth:`VAE.forward`.
     For single-image inference after training, use ``model.vae.encode`` and
     ``model.vae.decode`` directly.
     """
@@ -462,8 +512,8 @@ class AdaGVAE(nn.Module):
 
         * ``train()`` – adaptive grouping of the two posteriors (see
           :meth:`_encode_pair`), then sampling and decoding.
-        * ``eval()`` – no grouping: each input goes through the wrapped
-          :class:`VAE` independently, with ``z = mu``.
+        * ``eval()`` – no grouping: each input goes independently through
+          :meth:`VAE.forward`, which samples ``z`` from its own posterior.
 
         For single-image inference after training use ``model.vae.encode``
         and ``model.vae.decode``.

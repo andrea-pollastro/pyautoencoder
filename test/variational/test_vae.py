@@ -140,7 +140,7 @@ def test_vae_training_encode_decode_forward_shapes_and_types():
     assert encoder.last_grad_enabled is True
     assert decoder.last_grad_enabled is True
 
-def test_vae_forward_matches_manual_encode_then_decode_in_eval_mode():
+def test_vae_forward_matches_manual_encode_then_decode():
     B, in_features, feat_dim, latent_dim, out_features, S = 3, 4, 6, 2, 5, 4
     x = torch.randn(B, in_features)
 
@@ -149,11 +149,11 @@ def test_vae_forward_matches_manual_encode_then_decode_in_eval_mode():
     vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     vae.build(x)
 
-    vae.eval()
-
+    torch.manual_seed(0)
     enc_out = vae._encode(x, S=S)
     dec_out = vae._decode(enc_out.z)
 
+    torch.manual_seed(0)
     out = vae.forward(x, S=S)
 
     assert torch.allclose(out.z, enc_out.z)
@@ -207,42 +207,39 @@ def test_vae_decode_reshapes_consistently_with_flattened_decoder_call():
     assert torch.allclose(dec_out.x_hat, x_hat_manual)
     assert decoder.last_input_shape == (B * S, latent_dim)
 
-def test_vae_encode_decode_in_eval_mode_are_deterministic_and_no_grad():
-    B, in_features, feat_dim, latent_dim, out_features, S = 3, 4, 6, 2, 5, 7
+@pytest.mark.parametrize("training", [True, False])
+def test_vae_encode_defaults_to_posterior_mean_without_grad(training):
+    B, in_features, feat_dim, latent_dim, out_features = 3, 4, 6, 2, 5
     x = torch.randn(B, in_features)
 
     encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
     decoder = DummyDecoder(latent_dim=latent_dim, out_features=out_features)
     vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     vae.build(x)
+    vae.train(training)
 
-    vae.eval()
-
-    enc1 = vae.encode(x, S=S)
-    enc2 = vae.encode(x, S=S)
+    enc1 = vae.encode(x)
+    enc2 = vae.encode(x)
 
     assert isinstance(enc1, VAEEncodeOutput)
-    assert enc1.z.shape == (B, S, latent_dim)
+    assert enc1.z.shape == (B, 1, latent_dim)
     assert enc1.mu.shape == (B, latent_dim)
     assert enc1.log_var.shape == (B, latent_dim)
+    assert torch.equal(enc1.z, enc1.mu.unsqueeze(1))
+    assert torch.equal(enc1.z, enc2.z)
 
     assert enc1.z.requires_grad is False
     assert enc1.mu.requires_grad is False
     assert enc1.log_var.requires_grad is False
-
-    assert torch.allclose(enc1.z, enc2.z) # type: ignore
-
-    expected_z = enc1.mu.unsqueeze(1).expand(-1, S, -1)
-    assert torch.allclose(enc1.z, expected_z)
-
     assert torch.is_grad_enabled() is True
 
     dec_out = vae.decode(enc1.z)
     assert isinstance(dec_out, VAEDecodeOutput)
-    assert dec_out.x_hat.shape == (B, S, out_features)
+    assert dec_out.x_hat.shape == (B, 1, out_features)
     assert dec_out.x_hat.requires_grad is False
 
-def test_vae_encode_in_train_mode_still_samples_but_without_grad():
+
+def test_vae_encode_with_sample_true_draws_samples_without_grad():
     B, in_features, feat_dim, latent_dim, out_features, S = 4, 5, 7, 3, 6, 2
     x = torch.randn(B, in_features)
 
@@ -250,19 +247,17 @@ def test_vae_encode_in_train_mode_still_samples_but_without_grad():
     decoder = DummyDecoder(latent_dim=latent_dim, out_features=out_features)
     vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     vae.build(x)
-
-    vae.train()
-
-    torch.manual_seed(123)
-    enc1 = vae.encode(x, S=S)
+    vae.eval()  # sampling does not depend on the mode
 
     torch.manual_seed(123)
-    enc2 = vae.encode(x, S=S)
+    enc1 = vae.encode(x, S=S, sample=True)
+
+    torch.manual_seed(123)
+    enc2 = vae.encode(x, S=S, sample=True)
 
     assert isinstance(enc1, VAEEncodeOutput)
     assert enc1.z.shape == (B, S, latent_dim)
-
-    assert torch.allclose(enc1.z, enc2.z) # type: ignore
+    assert torch.allclose(enc1.z, enc2.z)
 
     assert enc1.z.requires_grad is False
     assert enc1.mu.requires_grad is False
@@ -270,6 +265,14 @@ def test_vae_encode_in_train_mode_still_samples_but_without_grad():
 
     tiled_mu = enc1.mu.unsqueeze(1).expand(-1, S, -1)
     assert not torch.allclose(enc1.z, tiled_mu)
+
+
+def test_vae_encode_with_several_samples_requires_sample_true():
+    vae = VAE(encoder=DummyEncoder(4, 6), decoder=DummyDecoder(2, 4), latent_dim=2)
+
+    with pytest.raises(ValueError, match="sample=True"):
+        vae.encode(torch.randn(3, 4), S=5)
+
 
 def test_vae_output_repr_uses_modeloutput_smart_repr():
     B, S, Dz, out_features = 2, 3, 4, 5
@@ -403,7 +406,7 @@ def test_vae_compute_loss_bernoulli_likelihood():
     assert 'kl_divergence' in loss_result.diagnostics
 
 
-def test_vae_compute_loss_eval_mode_elbo_independent_of_S():
+def test_vae_forward_samples_in_eval_mode_too():
     B, in_features, feat_dim, latent_dim = 2, 4, 6, 2
     x = torch.randn(B, in_features)
 
@@ -412,17 +415,22 @@ def test_vae_compute_loss_eval_mode_elbo_independent_of_S():
     vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     vae.build(x)
 
-    vae.eval()
     with torch.no_grad():
-        out_s1 = vae.forward(x, S=1)
-        loss_s1 = vae.compute_loss(x, out_s1)
+        vae.train()
+        torch.manual_seed(0)
+        loss_train = vae.compute_loss(x, vae(x, S=5))
 
-        out_s5 = vae.forward(x, S=5)
-        loss_s5 = vae.compute_loss(x, out_s5)
+        # Without dropout/batch norm, eval mode gives exactly the same sampled ELBO
+        vae.eval()
+        torch.manual_seed(0)
+        out_eval = vae(x, S=5)
+        loss_eval = vae.compute_loss(x, out_eval)
 
-        assert torch.allclose(loss_s1.objective, loss_s5.objective, atol=1e-5)
-        assert abs(loss_s1.diagnostics['elbo'] - loss_s5.diagnostics['elbo']) < 1e-5
-        assert abs(loss_s1.diagnostics['log_likelihood'] - loss_s5.diagnostics['log_likelihood']) < 1e-5
+        out_mean = vae(x, sample=False)
+
+    assert not torch.allclose(out_eval.z, out_eval.mu.unsqueeze(1).expand(-1, 5, -1))
+    assert torch.equal(loss_train.diagnostics['elbo'], loss_eval.diagnostics['elbo'])
+    assert torch.equal(out_mean.z, out_mean.mu.unsqueeze(1))
 
 
 def test_vae_compute_loss_backward_flows_through_all_params():
@@ -530,11 +538,9 @@ def test_vae_state_dict_round_trip_without_build():
     dst = make_vae()
     dst.load_state_dict(src.state_dict(), strict=True)
 
-    src.eval()
-    dst.eval()
     with torch.no_grad():
-        out_src = src(x)
-        out_dst = dst(x)
+        out_src = src(x, sample=False)
+        out_dst = dst(x, sample=False)
     assert torch.equal(out_src.mu, out_dst.mu)
     assert torch.equal(out_src.log_var, out_dst.log_var)
     assert torch.equal(out_src.x_hat, out_dst.x_hat)
@@ -591,7 +597,7 @@ def test_adagvae_forward_training_returns_adagvae_output():
 def test_adagvae_inference_via_encode_decode():
     from pyautoencoder.variational.vae import AdaGVAE
 
-    B, in_features, feat_dim, latent_dim, out_features, S = 4, 6, 8, 3, 5, 2
+    B, in_features, feat_dim, latent_dim, out_features = 4, 6, 8, 3, 5
     x = torch.randn(B, in_features)
 
     encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
@@ -601,15 +607,16 @@ def test_adagvae_inference_via_encode_decode():
 
     adagvae.eval()
 
-    enc = adagvae.vae.encode(x, S=S)
+    enc = adagvae.vae.encode(x)
     dec = adagvae.vae.decode(enc.z)
 
     assert isinstance(enc, VAEEncodeOutput)
-    assert enc.z.shape == (B, S, latent_dim)
+    assert enc.z.shape == (B, 1, latent_dim)
+    assert torch.equal(enc.z, enc.mu.unsqueeze(1))
     assert enc.z.requires_grad is False
 
     assert isinstance(dec, VAEDecodeOutput)
-    assert dec.x_hat.shape == (B, S, out_features)
+    assert dec.x_hat.shape == (B, 1, out_features)
     assert dec.x_hat.requires_grad is False
 
 
@@ -917,14 +924,17 @@ def test_adagvae_eval_forward_behaves_as_plain_vae():
     x1, x2 = torch.randn(B, 5), torch.randn(B, 5)
 
     with torch.no_grad():
+        torch.manual_seed(0)
         out = adagvae((x1, x2), S=S)
+        torch.manual_seed(0)
         ref1 = adagvae.vae(x1, S=S)
         ref2 = adagvae.vae(x2, S=S)
 
+    # Same seed, same results: no grouping, each input through VAE.forward
     for out_i, ref_i in ((out.output1, ref1), (out.output2, ref2)):
         assert torch.equal(out_i.mu, ref_i.mu)
         assert torch.equal(out_i.log_var, ref_i.log_var)
-        assert torch.equal(out_i.z, ref_i.mu.unsqueeze(1).expand(-1, S, -1))
+        assert torch.equal(out_i.z, ref_i.z)
         assert torch.equal(out_i.x_hat, ref_i.x_hat)
 
 

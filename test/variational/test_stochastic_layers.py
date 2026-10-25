@@ -92,41 +92,51 @@ def test_ffg_training_sampling_uses_global_rng():
     assert torch.allclose(z1, z2)
 
 
-def test_ffg_eval_forward_is_deterministic_and_uses_mu_only():
-    B, F, Dz, S = 3, 5, 4, 6
+@pytest.mark.parametrize("training", [True, False])
+def test_ffg_sample_false_returns_mean_in_any_mode(training):
+    B, F, Dz = 3, 5, 4
     x = torch.randn(B, F)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
+    head.train(training)
 
-    head.eval()
+    z, mu, log_var = head(x, sample=False)
 
-    z, mu, log_var = head(x, S=S)
-
-    assert z.shape == (B, S, Dz)
+    assert z.shape == (B, 1, Dz)
     assert mu.shape == (B, Dz)
     assert log_var.shape == (B, Dz)
-
-    expected_z = mu.unsqueeze(1).expand(-1, S, -1)
-    assert torch.allclose(z, expected_z)
+    assert torch.equal(z, mu.unsqueeze(1))
 
     assert z.requires_grad is True
     assert mu.requires_grad is True
     assert log_var.requires_grad is True
 
-def test_ffg_eval_forward_respects_default_S_equals_1():
+
+@pytest.mark.parametrize("training", [True, False])
+def test_ffg_samples_by_default_in_any_mode(training):
     B, F, Dz = 2, 4, 3
     x = torch.randn(B, F)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    head.eval()
+    head.train(training)
+    head(x)  # materialize the lazy layers first: their init also consumes the RNG
 
-    z, mu, log_var = head(x)  # S default = 1
+    torch.manual_seed(0)
+    z1, mu, _ = head(x)  # S = 1, sample = True by default
+    torch.manual_seed(0)
+    z2, _, _ = head(x)
 
-    assert z.shape == (B, 1, Dz)
-    assert mu.shape == (B, Dz)
-    assert log_var.shape == (B, Dz)
-    expected_z = mu.unsqueeze(1)
-    assert torch.allclose(z, expected_z)
+    assert z1.shape == (B, 1, Dz)
+    assert torch.equal(z1, z2)                      # reproducible with a seed
+    assert not torch.allclose(z1, mu.unsqueeze(1))  # but not the mean
+
+
+@pytest.mark.parametrize("S", [2, 10])
+def test_ffg_sample_false_rejects_more_than_one_sample(S):
+    head = FullyFactorizedGaussian(latent_dim=3)
+
+    with pytest.raises(ValueError, match="sample=True"):
+        head(torch.randn(2, 4), S=S, sample=False)
 
 
 def test_ffg_rejects_invalid_S_values():
