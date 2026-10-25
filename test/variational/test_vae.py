@@ -523,6 +523,34 @@ def test_vae_compute_loss_with_different_likelihood_formats():
     assert torch.allclose(loss_str.objective, loss_enum.objective, atol=1e-6)
 
 
+# ================= Save / load =================
+
+def test_vae_state_dict_round_trip_without_build():
+    B, in_features, feat_dim, latent_dim = 3, 5, 7, 4
+    x = torch.randn(B, in_features)
+
+    def make_vae() -> VAE:
+        encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+        decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+        return VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+
+    src = make_vae()
+    src.build(x)
+
+    # The sampling layer is still lazy here; loading materializes it
+    dst = make_vae()
+    dst.load_state_dict(src.state_dict(), strict=True)
+
+    src.eval()
+    dst.eval()
+    with torch.no_grad():
+        out_src = src(x)
+        out_dst = dst(x)
+    assert torch.equal(out_src.mu, out_dst.mu)
+    assert torch.equal(out_src.log_var, out_dst.log_var)
+    assert torch.equal(out_src.x_hat, out_dst.x_hat)
+
+
 # ================= AdaGVAE =================
 
 def test_adagvae_wraps_vae():

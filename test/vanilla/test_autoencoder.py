@@ -278,6 +278,15 @@ def test_ae_compute_loss_diagnostics_log_likelihood_negative_of_objective():
     assert torch.allclose(torch.tensor(ll), torch.tensor(-nll), atol=1e-6)
 
 
+def test_ae_compute_loss_rejects_mismatched_shapes():
+    ae = AE(encoder=nn.Identity(), decoder=nn.Identity())
+    x = torch.zeros(4)
+    ae_output = AEOutput(x_hat=torch.arange(4.0).unsqueeze(1), z=x)  # [4, 1] vs [4]
+
+    with pytest.raises(ValueError, match="same shape"):
+        ae.compute_loss(x, ae_output, likelihood='gaussian')
+
+
 def test_ae_compute_loss_batch_size_one():
     in_features = 4
     latent_features = 2

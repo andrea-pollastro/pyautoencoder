@@ -131,6 +131,23 @@ def test_log_likelihood_invalid_likelihood_raises():
     with pytest.raises(ValueError, match="Unsupported likelihood"):
         log_likelihood(x, x_hat, likelihood=FakeEnum()) # type: ignore
 
+@pytest.mark.parametrize("likelihood", ["gaussian", "bernoulli"])
+@pytest.mark.parametrize(
+    "x_shape, x_hat_shape",
+    [
+        ((4,), (4, 1)),        # would broadcast to [4, 4]
+        ((4, 1), (4,)),
+        ((2, 3), (2, 1)),      # would broadcast to [2, 3]
+        ((2, 1, 3), (2, 5, 3)),
+    ],
+)
+def test_log_likelihood_shape_mismatch_raises(likelihood, x_shape, x_hat_shape):
+    x = torch.rand(x_shape)
+    x_hat = torch.rand(x_hat_shape)
+
+    with pytest.raises(ValueError, match="same shape"):
+        log_likelihood(x, x_hat, likelihood=likelihood)
+
 # ================= kl_divergence_diag_gaussian =================
 
 def test_kl_divergence_standard_case_vs_standard_normal():

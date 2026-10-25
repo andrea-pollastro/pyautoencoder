@@ -88,6 +88,12 @@ def log_likelihood(x: torch.Tensor,
     torch.Tensor
         Elementwise log-likelihood with the same shape as ``x``.
 
+    Raises
+    ------
+    ValueError
+        If ``x`` and ``x_hat`` do not have the same shape. Broadcasting is
+        not allowed, because it would silently produce a wrong loss.
+
     Notes
     -----
     - The Gaussian case omits the normalization constant
@@ -96,6 +102,12 @@ def log_likelihood(x: torch.Tensor,
     - The Bernoulli case is fully numerically stable because it operates
       directly in log-space.
     """
+
+    if x.shape != x_hat.shape:
+        raise ValueError(
+            f"x and x_hat must have the same shape, got {tuple(x.shape)} "
+            f"and {tuple(x_hat.shape)}."
+        )
 
     if isinstance(likelihood, str):
         likelihood = LikelihoodType(likelihood.lower())
