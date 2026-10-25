@@ -49,6 +49,8 @@ Full documentation (installation, tutorials, API reference, and examples) is ava
 
 👉 **https://pyautoencoder.readthedocs.io/en/latest/**
 
+Also available on GitHub Pages: **https://andrea-pollastro.github.io/pyautoencoder/**
+
 ---
 
 ## Installation

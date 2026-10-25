@@ -1,0 +1,63 @@
+name: Docs
+
+# Builds the Sphinx documentation and publishes it to GitHub Pages:
+# https://andrea-pollastro.github.io/pyautoencoder/
+# Requires Settings -> Pages -> Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools-scm needs the tags to compute the version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # CPU-only torch is enough for autodoc and much smaller to download
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r docs/requirements.txt
+          pip install .
+
+      - name: Build HTML
+        run: sphinx-build -b html docs/source docs/build/html
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
