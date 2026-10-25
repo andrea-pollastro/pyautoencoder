@@ -22,7 +22,7 @@ Key elements in this section include:
 
 * :data:`LATENT_DIM`, :data:`NUM_EPOCHS`, :data:`BATCH_SIZE` –
   the primary model and training hyperparameters,
-* :data:`DEVICE` – automatically selects ``"cuda"`` when available,
+* :data:`DEVICE` – the device used for training (the CPU),
 * :func:`set_seed` – helper function to provide reproducible runs.
 
 

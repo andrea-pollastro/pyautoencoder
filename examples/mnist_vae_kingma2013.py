@@ -8,7 +8,9 @@ The setup follows the original paper:
 - One hidden layer MLPs with Tanh activations in encoder/decoder
 - Hidden size H = 500
 - Mini-batch size M = 100
-- Learning rate selected from {0.01, 0.02, 0.1} (we use 0.02 here)
+- Adagrad, learning rate selected from {0.01, 0.02, 0.1} (we use 0.02 here)
+- Small weight decay corresponding to a prior p(theta) = N(0, I) on the
+  generative (decoder) parameters theta
 - L = 1 Monte Carlo sample for the stochastic latent variable
 """
 
@@ -44,7 +46,7 @@ TARGET_TRAIN_SAMPLES: int = int(1e7)          # stop after this many training sa
 EVAL_EVERY_SAMPLES: int = int(1e5)            # evaluate and log every this many samples
 USE_STOCHASTIC_BINARIZATION: bool = False     # binarize x ~ Bernoulli(p = p_x) if True
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cpu")
 SEED: int = 1926
 
 
@@ -53,8 +55,6 @@ def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
 
 
 def init_weights_small_normal(module: nn.Module) -> None:
@@ -136,8 +136,17 @@ def train_one_setting(
     test_loader: DataLoader,
 ) -> Tuple[VAE, List[Dict[str, float]]]:
     model = make_vae(latent_dim).to(DEVICE)
+
+    # Paper, Sec. 5: "a small weight decay term corresponding to a prior p(theta) = N(0, I)"
+    # on the generative parameters theta (the decoder). The loss is a per-datapoint mean,
+    # i.e. the dataset objective divided by N, so the prior contributes -||theta||^2 / (2N):
+    # a weight decay of 1/N. The variational parameters phi (encoder) have no prior.
+    weight_decay = 1.0 / len(train_loader.dataset)
     optimizer = torch.optim.Adagrad(
-        model.parameters(),
+        [
+            {"params": model.decoder.parameters(), "weight_decay": weight_decay},
+            {"params": [*model.encoder.parameters(), *model.sampling_layer.parameters()]},
+        ],
         lr=LEARNING_RATE,
     )
 

@@ -14,8 +14,10 @@ The setup follows the configuration in the paper:
 * one-hidden-layer MLP encoder and decoder with Tanh activations;
 * hidden size :math:`H = 500`;
 * mini-batch size :math:`M = 100`;
-* learning rate selected from :math:`\{0.01, 0.02, 0.1\}` (here: ``0.02``);
-* small weight decay (approximate :math:`\mathcal{N}(0, I)` prior on weights);
+* Adagrad, learning rate selected from :math:`\{0.01, 0.02, 0.1\}` (here: ``0.02``);
+* small weight decay corresponding to a prior :math:`p(\theta) = \mathcal{N}(0, I)`
+  on the generative (decoder) parameters, i.e. a weight decay of :math:`1/N` with
+  :math:`N` training points, since the loss is a per-datapoint mean;
 * :math:`L = 1` Monte Carlo sample for the latent variable estimator.
 
 

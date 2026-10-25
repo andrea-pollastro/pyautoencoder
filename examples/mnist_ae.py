@@ -21,7 +21,7 @@ BATCH_SIZE = 128
 LEARNING_RATE = 1e-3
 NUM_RECON_COLS = 10
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cpu")
 SEED = 1926
 
 # ---------------- Utils ----------------- #
@@ -29,8 +29,6 @@ def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
 
 
 # ---------------- Data ------------------ #
@@ -91,12 +89,12 @@ def train(
             running_log_likelihood += loss_info.diagnostics['log_likelihood'] * batch_size
             n += batch_size
 
-        avg_NLL = running_log_likelihood.item() / n  # one GPU sync per epoch
+        avg_log_likelihood = running_log_likelihood.item() / n
         elapsed = time.time() - start_time
 
         print(
             f"Epoch {epoch:3d}/{num_epochs}  "
-            f"LogLikelihood={avg_NLL:.4f} | "
+            f"LogLikelihood={avg_log_likelihood:.4f} | "
             f"(elapsed {elapsed:.1f}s)"
         )
 
