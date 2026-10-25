@@ -45,6 +45,9 @@ dependencies = [
 
 dynamic = ["version"]
 
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
 [project.urls]
 Homepage = "https://github.com/andrea-pollastro/pyautoencoder"
 Repository = "https://github.com/andrea-pollastro/pyautoencoder"
@@ -56,3 +59,8 @@ include = ["pyautoencoder*"]
 
 [tool.setuptools_scm]
 write_to = "pyautoencoder/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+# Import the package from this checkout, not from a (possibly stale) installed copy.
+pythonpath = ["."]

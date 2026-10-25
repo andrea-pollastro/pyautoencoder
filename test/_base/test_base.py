@@ -143,7 +143,6 @@ def test_build_runs_forward_under_no_grad():
     model = ToyAutoencoder()
     x = torch.randn(4, model.in_dim)
 
-    torch.set_grad_enabled(True)
     model.build(x)
 
     # build() is @torch.no_grad(), so forward sees grad disabled
@@ -156,7 +155,6 @@ def test_training_paths_use_grad_encode_decode_forward():
     model = ToyAutoencoder()
     x = torch.randn(5, model.in_dim)
 
-    torch.set_grad_enabled(True)
 
     out_f = model.forward(x)
     assert isinstance(out_f, AEForwardOutput)
@@ -181,7 +179,6 @@ def test_inference_encode_decode_use_inference_mode_no_grad():
     model = ToyAutoencoder()
     x = torch.randn(5, model.in_dim)
 
-    torch.set_grad_enabled(True)
     assert torch.is_grad_enabled() is True
 
     encode_out = model.encode(x)

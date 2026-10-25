@@ -54,7 +54,6 @@ def test_ffg_training_forward_shapes_and_grad_and_sampling():
     head = FullyFactorizedGaussian(latent_dim=Dz)
 
     head.train()
-    torch.set_grad_enabled(True)
 
     z, mu, log_var = head(x, S=S)
 
@@ -77,7 +76,6 @@ def test_ffg_training_sampling_uses_global_rng():
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
     head.train()
-    torch.set_grad_enabled(True)
 
     # Warm up to materialize lazy layers before seeded calls, so that
     # lazy-init RNG consumption doesn't interfere with the seed.
@@ -101,7 +99,6 @@ def test_ffg_eval_forward_is_deterministic_and_uses_mu_only():
     head = FullyFactorizedGaussian(latent_dim=Dz)
 
     head.eval()
-    torch.set_grad_enabled(True)
 
     z, mu, log_var = head(x, S=S)
 
