@@ -43,8 +43,14 @@ class FullyFactorizedGaussian(nn.Module):
         -------
         tuple[torch.Tensor, torch.Tensor]
             ``(mu, log_var)``, each of shape ``[B, latent_dim]``.
+
+        Raises
+        ------
+        ValueError
+            If ``x`` is not of shape ``[B, F]``.
         """
 
+        self._check_features(x)
         return self.mu(x), self.log_var(x)  # type: ignore
 
     def forward(self, x: torch.Tensor, S: int = 1) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -81,29 +87,31 @@ class FullyFactorizedGaussian(nn.Module):
         Raises
         ------
         ValueError
-            If ``S < 1``.
+            If ``S < 1`` or if ``x`` is not of shape ``[B, F]``.
         """
 
-        if S < 1:
-            raise ValueError("S must be >= 1.")
-
-        mu = self.mu(x)             # [B, Dz]
-        log_var = self.log_var(x)   # [B, Dz]
+        _check_num_samples(S)
+        mu, log_var = self.get_params(x)  # [B, Dz] each
 
         if self.training:
-            z = self._reparametrize(mu=mu, log_var=log_var, S=S) # [B, S, Dz]
+            z = self.reparametrize(mu=mu, log_var=log_var, S=S)  # [B, S, Dz]
         else:
             z = mu.unsqueeze(1).expand(-1, S, -1)               # [B, S, Dz]
 
         return z, mu, log_var
-    
-    def _reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1) -> torch.Tensor:
+
+    def reparametrize(self, mu: torch.Tensor, log_var: torch.Tensor, S: int = 1) -> torch.Tensor:
         r"""Draw ``S`` latent samples via the reparameterization trick.
 
         .. math::
 
             z^{(s)} = \mu + \sigma \odot \epsilon^{(s)},
             \qquad \epsilon^{(s)} \sim \mathcal{N}(0, I).
+
+        Unlike :meth:`forward`, this method always samples, regardless of
+        train/eval mode. It is differentiable with respect to ``mu`` and
+        ``log_var``, so it can be used on posterior parameters computed
+        elsewhere (for example the adapted posteriors of :class:`AdaGVAE`).
 
         Parameters
         ----------
@@ -112,17 +120,43 @@ class FullyFactorizedGaussian(nn.Module):
         log_var : torch.Tensor
             Log-variance of the posterior, shape ``[B, D_z]``.
         S : int, optional
-            Number of samples to draw. Defaults to ``1``.
+            Number of samples to draw. Must be ``>= 1``. Defaults to ``1``.
 
         Returns
         -------
         torch.Tensor
             Sampled latent codes of shape ``[B, S, D_z]``.
+
+        Raises
+        ------
+        ValueError
+            If ``S < 1``, or if ``mu`` and ``log_var`` are not both of
+            shape ``[B, D_z]``.
         """
+        _check_num_samples(S)
+        if mu.dim() != 2 or mu.shape != log_var.shape:
+            raise ValueError(
+                "mu and log_var must both have shape [B, D_z], got "
+                f"{tuple(mu.shape)} and {tuple(log_var.shape)}."
+            )
+
         std = torch.exp(0.5 * log_var)              # [B, Dz]
         mu_e  = mu.unsqueeze(1).expand(-1, S, -1)   # [B, S, Dz]
         std_e = std.unsqueeze(1).expand(-1, S, -1)  # [B, S, Dz]
         eps = torch.randn_like(std_e)
         z = mu_e + std_e * eps                      # [B, S, Dz]
         return z
-    
+
+    @staticmethod
+    def _check_features(x: torch.Tensor) -> None:
+        if x.dim() != 2:
+            raise ValueError(
+                "FullyFactorizedGaussian expects encoder features of shape [B, F], "
+                f"got {tuple(x.shape)}. The encoder must output one flat feature "
+                "vector per sample, e.g. by ending it with nn.Flatten()."
+            )
+
+
+def _check_num_samples(S: int) -> None:
+    if S < 1:
+        raise ValueError(f"S must be >= 1, got {S}.")

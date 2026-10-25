@@ -76,6 +76,20 @@ class VAE(BaseAutoencoder):
 
     Training uses Monte Carlo samples ``z`` for the reparameterization trick;
     evaluation mode returns deterministic repeated means.
+
+    Shape convention
+    ----------------
+    Latent codes and reconstructions always carry an explicit Monte Carlo
+    sample dimension ``S`` right after the batch dimension, **also when**
+    ``S = 1``:
+
+    * ``z``: ``[B, S, D_z]``
+    * ``x_hat``: ``[B, S, ...]``
+    * ``mu``, ``log_var``: ``[B, D_z]`` (one posterior per input, no ``S``)
+
+    Consequently, :meth:`decode` expects ``z`` of shape ``[B, S, D_z]``. To
+    decode a batch of single codes ``[N, D_z]`` (e.g. samples from the prior
+    :math:`p(z)`), use ``z.unsqueeze(1)`` or call ``model.decoder`` directly.
     """
 
     def __init__(
@@ -115,15 +129,20 @@ class VAE(BaseAutoencoder):
         ----------
         x : torch.Tensor
             Input batch of shape ``[B, ...]``. The encoder must output a flat
-            feature vector per sample suitable for the sampling layer.
+            feature vector per sample, of shape ``[B, F]``.
         S : int, optional
-            Number of latent samples per input. Defaults to 1.
+            Number of latent samples per input. Must be ``>= 1``. Defaults to 1.
 
         Returns
         -------
         VAEEncodeOutput
-            Contains ``z`` of shape ``[B, S, D_z]``, and ``mu`` and ``log_var`` of
-            shape ``[B, D_z]``.
+            Contains ``z`` of shape ``[B, S, D_z]`` (also for ``S = 1``), and
+            ``mu`` and ``log_var`` of shape ``[B, D_z]``.
+
+        Raises
+        ------
+        ValueError
+            If ``S < 1`` or if the encoder output is not of shape ``[B, F]``.
 
         Notes
         -----
@@ -143,13 +162,28 @@ class VAE(BaseAutoencoder):
         Parameters
         ----------
         z : torch.Tensor
-            Latent samples of shape ``[B, S, D_z]``.
+            Latent samples of shape ``[B, S, D_z]``. The sample dimension
+            ``S`` is required, also when ``S = 1``.
 
         Returns
         -------
         VAEDecodeOutput
             Contains ``x_hat`` of shape ``[B, S, ...]``.
+
+        Raises
+        ------
+        ValueError
+            If ``z`` is not of shape ``[B, S, D_z]`` with
+            ``D_z == latent_dim``.
         """
+
+        if z.dim() != 3 or z.size(-1) != self.latent_dim:
+            raise ValueError(
+                f"VAE expects z of shape [B, S, D_z] with D_z = {self.latent_dim} "
+                f"(S = number of Monte Carlo samples, also when S = 1), got "
+                f"{tuple(z.shape)}. For a batch of single codes [N, D_z] use "
+                "z.unsqueeze(1), or call model.decoder directly."
+            )
 
         B, S, D_z = z.shape
         x_hat_flat = self.decoder(z.reshape(B * S, D_z))  # [B * S, ...]
@@ -404,8 +438,8 @@ class AdaGVAE(nn.Module):
         log_var_tilde1 = torch.where(mask, log_var_mean, log_var1)
         log_var_tilde2 = torch.where(mask, log_var_mean, log_var2)
 
-        z1 = self.vae.sampling_layer._reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
-        z2 = self.vae.sampling_layer._reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
+        z1 = self.vae.sampling_layer.reparametrize(mu=mu_tilde1, log_var=log_var_tilde1, S=S)
+        z2 = self.vae.sampling_layer.reparametrize(mu=mu_tilde2, log_var=log_var_tilde2, S=S)
 
         return (
             VAEEncodeOutput(z=z1, mu=mu_tilde1, log_var=log_var_tilde1),

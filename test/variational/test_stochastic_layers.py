@@ -148,21 +148,21 @@ def test_ffg_rejects_invalid_S_values():
     with pytest.raises(ValueError, match="S must be >= 1"):
         head(x, S=-5)
 
-# ======================= FullyFactorizedGaussian._reparametrize =======================
+# ======================= FullyFactorizedGaussian.reparametrize =======================
 
-def test__reparametrize_shapes():
+def test_reparametrize_shapes():
     B, Dz, S = 3, 5, 4
     mu = torch.randn(B, Dz, requires_grad=True)
     log_var = torch.randn(B, Dz, requires_grad=True)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     assert z.shape == (B, S, Dz)
     assert z.requires_grad is True
 
 
-def test__reparametrize_deterministic_with_seed():
+def test_reparametrize_deterministic_with_seed():
     B, Dz, S = 2, 3, 4
     mu = torch.randn(B, Dz)
     log_var = torch.randn(B, Dz)
@@ -170,74 +170,74 @@ def test__reparametrize_deterministic_with_seed():
     head = FullyFactorizedGaussian(latent_dim=Dz)
 
     torch.manual_seed(42)
-    z1 = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z1 = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     torch.manual_seed(42)
-    z2 = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z2 = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     assert torch.allclose(z1, z2)
 
 
-def test__reparametrize_stochastic_without_seed():
+def test_reparametrize_stochastic_without_seed():
     B, Dz, S = 2, 3, 10
     mu = torch.randn(B, Dz)
     log_var = torch.randn(B, Dz)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
 
-    z1 = head._reparametrize(mu=mu, log_var=log_var, S=S)
-    z2 = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z1 = head.reparametrize(mu=mu, log_var=log_var, S=S)
+    z2 = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     assert not torch.allclose(z1, z2)
 
 
-def test__reparametrize_preserves_dtype():
+def test_reparametrize_preserves_dtype():
     B, Dz, S = 2, 3, 4
 
     mu32 = torch.randn(B, Dz, dtype=torch.float32)
     log_var32 = torch.randn(B, Dz, dtype=torch.float32)
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z32 = head._reparametrize(mu=mu32, log_var=log_var32, S=S)
+    z32 = head.reparametrize(mu=mu32, log_var=log_var32, S=S)
     assert z32.dtype == torch.float32
 
     mu64 = torch.randn(B, Dz, dtype=torch.float64)
     log_var64 = torch.randn(B, Dz, dtype=torch.float64)
-    z64 = head._reparametrize(mu=mu64, log_var=log_var64, S=S)
+    z64 = head.reparametrize(mu=mu64, log_var=log_var64, S=S)
     assert z64.dtype == torch.float64
 
 
-def test__reparametrize_mean_close_to_mu():
+def test_reparametrize_mean_close_to_mu():
     B, Dz, S = 2, 3, 10000
     mu = torch.randn(B, Dz)
     log_var = torch.zeros(B, Dz)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     z_mean = z.mean(dim=1)  # [B, Dz]
     assert torch.allclose(z_mean, mu, atol=0.05)
 
 
-def test__reparametrize_std_close_to_expected():
+def test_reparametrize_std_close_to_expected():
     B, Dz, S = 2, 3, 10000
     mu = torch.zeros(B, Dz)
     expected_std = 2.0
     log_var = torch.full((B, Dz), 2.0 * math.log(expected_std))
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     z_std = z.std(dim=1)  # [B, Dz]
     assert torch.allclose(z_std, torch.full_like(z_std, expected_std), atol=0.1)
 
 
-def test__reparametrize_backward():
+def test_reparametrize_backward():
     B, Dz, S = 2, 3, 4
     mu = torch.randn(B, Dz, requires_grad=True)
     log_var = torch.randn(B, Dz, requires_grad=True)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     loss = z.sum()
     loss.backward()
@@ -248,24 +248,66 @@ def test__reparametrize_backward():
     assert torch.any(log_var.grad != 0)
 
 
-def test__reparametrize_with_s_equals_one():
+def test_reparametrize_with_s_equals_one():
     B, Dz = 3, 4
     mu = torch.randn(B, Dz)
     log_var = torch.randn(B, Dz)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=1)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=1)
 
     assert z.shape == (B, 1, Dz)
 
 
-def test__reparametrize_large_s():
+def test_reparametrize_large_s():
     B, Dz, S = 2, 3, 1000
     mu = torch.randn(B, Dz)
     log_var = torch.randn(B, Dz)
 
     head = FullyFactorizedGaussian(latent_dim=Dz)
-    z = head._reparametrize(mu=mu, log_var=log_var, S=S)
+    z = head.reparametrize(mu=mu, log_var=log_var, S=S)
 
     assert z.shape == (B, S, Dz)
     assert torch.isfinite(z).all()
+
+
+@pytest.mark.parametrize("S", [0, -1])
+def test_reparametrize_rejects_invalid_S(S):
+    head = FullyFactorizedGaussian(latent_dim=3)
+    mu, log_var = torch.zeros(2, 3), torch.zeros(2, 3)
+
+    with pytest.raises(ValueError, match="S must be >= 1"):
+        head.reparametrize(mu=mu, log_var=log_var, S=S)
+
+
+@pytest.mark.parametrize(
+    "mu_shape, log_var_shape",
+    [((2, 3), (2, 4)), ((2, 1, 3), (2, 1, 3)), ((3,), (3,))],
+)
+def test_reparametrize_rejects_bad_shapes(mu_shape, log_var_shape):
+    head = FullyFactorizedGaussian(latent_dim=3)
+
+    with pytest.raises(ValueError, match=r"shape \[B, D_z\]"):
+        head.reparametrize(mu=torch.zeros(mu_shape), log_var=torch.zeros(log_var_shape), S=2)
+
+
+def test_reparametrize_samples_also_in_eval_mode():
+    head = FullyFactorizedGaussian(latent_dim=3)
+    head.eval()
+    mu, log_var = torch.zeros(2, 3), torch.zeros(2, 3)
+
+    z = head.reparametrize(mu=mu, log_var=log_var, S=4)
+
+    assert not torch.allclose(z, torch.zeros_like(z))
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_ffg_rejects_non_flat_features(training):
+    head = FullyFactorizedGaussian(latent_dim=3)
+    head.train(training)
+    x = torch.randn(4, 2, 5)  # [B, C, F] instead of [B, F]
+
+    with pytest.raises(ValueError, match=r"shape \[B, F\].*nn\.Flatten"):
+        head(x)
+    with pytest.raises(ValueError, match=r"shape \[B, F\]"):
+        head.get_params(x)

@@ -840,3 +840,51 @@ def test_adagvae_compute_loss_equals_sum_of_individual_losses():
         pair_loss.diagnostics['elbo']
         - (loss1.diagnostics['elbo'] + loss2.diagnostics['elbo'])
     ) < 1e-5
+
+
+# ================= Shape validation =================
+
+def _make_built_vae(in_features: int = 5, feat_dim: int = 7, latent_dim: int = 4) -> VAE:
+    encoder = DummyEncoder(in_features=in_features, feat_dim=feat_dim)
+    decoder = DummyDecoder(latent_dim=latent_dim, out_features=in_features)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
+    vae.build(torch.randn(2, in_features))
+    return vae
+
+
+@pytest.mark.parametrize("z_shape", [(3, 4), (3, 1, 5), (3, 1, 1, 4)])
+def test_vae_decode_rejects_z_without_sample_dim_or_wrong_latent_dim(z_shape):
+    vae = _make_built_vae(latent_dim=4)
+
+    with pytest.raises(ValueError, match=r"\[B, S, D_z\].*D_z = 4.*unsqueeze\(1\)"):
+        vae.decode(torch.randn(z_shape))
+    with pytest.raises(ValueError, match=r"\[B, S, D_z\]"):
+        vae._decode(torch.randn(z_shape))
+
+
+def test_vae_decode_accepts_single_sample_with_explicit_S_dim():
+    vae = _make_built_vae(in_features=5, latent_dim=4)
+
+    dec = vae.decode(torch.randn(3, 4).unsqueeze(1))
+
+    assert dec.x_hat.shape == (3, 1, 5)
+
+
+def test_vae_rejects_non_flat_encoder_output():
+    encoder = nn.Unflatten(1, (2, 3))  # [B, 6] -> [B, 2, 3]
+    decoder = DummyDecoder(latent_dim=4, out_features=6)
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=4)
+
+    with pytest.raises(ValueError, match=r"shape \[B, F\]"):
+        vae(torch.randn(4, 6))
+
+
+def test_adagvae_rejects_invalid_S():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    adagvae = AdaGVAE(vae=_make_built_vae())
+    adagvae.train()
+    x1, x2 = torch.randn(3, 5), torch.randn(3, 5)
+
+    with pytest.raises(ValueError, match="S must be >= 1"):
+        adagvae((x1, x2), S=0)
