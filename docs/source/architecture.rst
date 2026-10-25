@@ -87,14 +87,19 @@ The :class:`~pyautoencoder.variational.VAE` implements the VAE framework
 **Training vs Evaluation**
 
 - **Training mode** (:code:`model.train()`):
+
   - Samples :math:`S` latent codes per input
   - Enables Monte Carlo averaging of reconstruction loss
   - Returns shape :math:`[B, S, D_z]` for latents
 
 - **Evaluation mode** (:code:`model.eval()`):
+
   - Deterministic output (uses means, no sampling)
   - Faster inference
   - Still computes :math:`\mu` and :math:`\log\sigma^2` for diagnostics
+  - The ``elbo`` diagnostic is evaluated at :math:`z = \mu`, so it is not a
+    Monte Carlo ELBO estimate. To estimate the ELBO on held-out data, run the
+    forward pass in train mode under :func:`torch.no_grad`.
 
 **Output Structure**
 
@@ -142,6 +147,10 @@ per-dimension KL values:
 .. math::
 
     \tau = \tfrac{1}{2}(\max_d \mathrm{KL}_d + \min_d \mathrm{KL}_d)
+
+The alignment only affects training. In eval mode (:code:`model.eval()`) no
+grouping is applied: each input goes through the wrapped VAE independently,
+with :math:`z = \mu`.
 
 **Training**
 

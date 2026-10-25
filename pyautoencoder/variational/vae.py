@@ -287,6 +287,12 @@ class VAE(BaseAutoencoder):
         -----
         - All returned diagnostics are **batch means**.
         - Gradients flow through the decoder; neither input is detached.
+        - In eval mode the sampling layer returns ``z = mu`` (no sampling),
+          so the reconstruction term is evaluated at the posterior mean and
+          ``"elbo"`` is **not** a Monte Carlo estimate of the ELBO. To
+          estimate the ELBO on held-out data, run the forward pass in train
+          mode under :func:`torch.no_grad` (taking care of dropout and batch
+          normalization layers, which also depend on the mode).
         """
         x_hat = vae_output.x_hat
         mu = vae_output.mu
@@ -351,7 +357,9 @@ class AdaGVAE(nn.Module):
     All VAE parameters are tracked through this wrapper.
 
     :meth:`forward` expects a pair of inputs ``(x1, x2)`` and returns an
-    :class:`AdaGVAEOutput` with adapted latent representations for both.
+    :class:`AdaGVAEOutput` for both. The adaptive grouping only changes
+    training: in eval mode no grouping is applied and AdaGVAE behaves as the
+    wrapped VAE, encoding each input independently with ``z = mu``.
     For single-image inference after training, use ``model.vae.encode`` and
     ``model.vae.decode`` directly.
     """
@@ -391,6 +399,9 @@ class AdaGVAE(nn.Module):
            - If ``KL(q1_d||q2_d) < tau``: uses average distribution ``q_tilde``.
            - If ``KL(q1_d||q2_d) ≥ tau``: uses original independent distribution.
         5. Samples from the resulting (mixed) posteriors.
+
+        Grouping and sampling are always applied, regardless of train/eval
+        mode; :meth:`forward` only calls this method in train mode.
 
         Parameters
         ----------
@@ -447,7 +458,12 @@ class AdaGVAE(nn.Module):
         )
 
     def forward(self, x: tuple[torch.Tensor, torch.Tensor], S: int = 1) -> AdaGVAEOutput:
-        """AdaGVAE training pass on a pair of images.
+        """AdaGVAE forward pass on a pair of images.
+
+        * ``train()`` – adaptive grouping of the two posteriors (see
+          :meth:`_encode_pair`), then sampling and decoding.
+        * ``eval()`` – no grouping: each input goes through the wrapped
+          :class:`VAE` independently, with ``z = mu``.
 
         For single-image inference after training use ``model.vae.encode``
         and ``model.vae.decode``.
@@ -457,15 +473,19 @@ class AdaGVAE(nn.Module):
         x : tuple[torch.Tensor, torch.Tensor]
             A ``(x1, x2)`` pair, each of shape ``[B, ...]``.
         S : int, optional
-            Number of latent samples for Monte Carlo estimates. Defaults to 1.
+            Number of latent samples for Monte Carlo estimates. Must be
+            ``>= 1``. Defaults to 1.
 
         Returns
         -------
         AdaGVAEOutput
-            Adapted pair outputs containing reconstructions and posterior parameters
-            for both inputs.
+            Pair outputs containing reconstructions and posterior parameters
+            for both inputs (adapted posteriors in train mode).
         """
         x1, x2 = x
+        if not self.training:
+            return AdaGVAEOutput(output1=self.vae(x1, S=S), output2=self.vae(x2, S=S))
+
         x1_enc, x2_enc = self._encode_pair(x1, x2, S=S)
         x1_dec = self.vae._decode(x1_enc.z)
         x2_dec = self.vae._decode(x2_enc.z)
@@ -494,7 +514,7 @@ class AdaGVAE(nn.Module):
         x : tuple[torch.Tensor, torch.Tensor]
             The ``(x1, x2)`` pair of ground-truth inputs, each of shape ``[B, ...]``.
         vae_output : AdaGVAEOutput
-            Output from :meth:`forward` called in training mode.
+            Output from :meth:`forward`.
         beta : float, optional
             KL weighting factor. ``beta = 1`` yields the standard objective.
             Defaults to 1.

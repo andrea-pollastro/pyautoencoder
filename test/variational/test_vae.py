@@ -888,3 +888,41 @@ def test_adagvae_rejects_invalid_S():
 
     with pytest.raises(ValueError, match="S must be >= 1"):
         adagvae((x1, x2), S=0)
+
+
+# ================= AdaGVAE train vs eval =================
+
+def test_adagvae_eval_forward_behaves_as_plain_vae():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    B, S = 4, 3
+    adagvae = AdaGVAE(vae=_make_built_vae())
+    adagvae.eval()
+    x1, x2 = torch.randn(B, 5), torch.randn(B, 5)
+
+    with torch.no_grad():
+        out = adagvae((x1, x2), S=S)
+        ref1 = adagvae.vae(x1, S=S)
+        ref2 = adagvae.vae(x2, S=S)
+
+    for out_i, ref_i in ((out.output1, ref1), (out.output2, ref2)):
+        assert torch.equal(out_i.mu, ref_i.mu)
+        assert torch.equal(out_i.log_var, ref_i.log_var)
+        assert torch.equal(out_i.z, ref_i.mu.unsqueeze(1).expand(-1, S, -1))
+        assert torch.equal(out_i.x_hat, ref_i.x_hat)
+
+
+def test_adagvae_train_forward_shares_lowest_kl_dimension():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    adagvae = AdaGVAE(vae=_make_built_vae(latent_dim=4))
+    adagvae.train()
+    x1, x2 = torch.randn(6, 5), torch.randn(6, 5)
+
+    out = adagvae((x1, x2), S=2)
+
+    # The dimension with the smallest KL(q1||q2) is always below tau, so it is
+    # averaged and identical in both adapted posteriors.
+    shared = torch.isclose(out.output1.mu, out.output2.mu)
+    assert shared.any(dim=1).all()
+    assert not shared.all()
