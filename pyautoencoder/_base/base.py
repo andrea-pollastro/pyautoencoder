@@ -7,7 +7,7 @@ from dataclasses import dataclass, fields
 from ..loss.base import LossResult
 
 @dataclass(slots=True)
-class ModelOutput(ABC):
+class ModelOutput:
     """Base class for autoencoder outputs with a concise, tensor-aware ``repr``.
 
     Subclasses are dataclasses that group together tensors and auxiliary values
@@ -38,7 +38,7 @@ class ModelOutput(ABC):
                 s = repr(value)
                 parts.append(f"{name}={s}")
         return f"{self.__class__.__name__}({', '.join(parts)})"
-    
+
 class BaseAutoencoder(nn.Module, ABC):
     """Base class for autoencoders.
 
@@ -155,7 +155,7 @@ class BaseAutoencoder(nn.Module, ABC):
 
         pass
 
-    # --- inference-only convenience wrappers (no grad; optional eval mode) ---
+    # --- inference-only convenience wrappers (no grad) ---
     @torch.inference_mode()
     def encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Encode inputs without tracking gradients.
@@ -234,7 +234,7 @@ class BaseAutoencoder(nn.Module, ABC):
         finally:
             for m, training in modes.items():
                 m.training = training
-    
+
     @abstractmethod
     def compute_loss(self, x: torch.Tensor, output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
         """Compute the loss for the autoencoder.

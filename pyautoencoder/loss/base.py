@@ -43,8 +43,8 @@ class LossResult:
     objective: torch.Tensor
     diagnostics: dict[str, torch.Tensor]
 
-def log_likelihood(x: torch.Tensor, 
-                   x_hat: torch.Tensor, 
+def log_likelihood(x: torch.Tensor,
+                   x_hat: torch.Tensor,
                    likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> torch.Tensor:
     r"""Compute the elementwise log-likelihood :math:`\log p(x \mid \hat{x})`.
 
@@ -114,20 +114,20 @@ def log_likelihood(x: torch.Tensor,
 
     if isinstance(likelihood, str):
         likelihood = LikelihoodType(likelihood.lower())
-    
+
     if likelihood == LikelihoodType.BERNOULLI:
         return -F.binary_cross_entropy_with_logits(x_hat, x, reduction='none')
-    
+
     elif likelihood == LikelihoodType.GAUSSIAN:
         squared_error = (x_hat - x) ** 2
         return -0.5 * squared_error
-    
+
     else:
         raise ValueError(f"Unsupported likelihood: {likelihood}")
-    
+
 def kl_divergence_diag_gaussian(
-    mu_q: torch.Tensor, 
-    log_var_q: torch.Tensor, 
+    mu_q: torch.Tensor,
+    log_var_q: torch.Tensor,
     mu_p: torch.Tensor | None = None,
     log_var_p: torch.Tensor | None = None,
     reduce_sum: bool = True) -> torch.Tensor:
@@ -146,9 +146,9 @@ def kl_divergence_diag_gaussian(
 
     .. math::
 
-        \mathrm{KL}(q \,\|\, p) = \frac{1}{2} \sum_{d} \left( 
-            (\log \sigma_{p,d}^2 - \log \sigma_{q,d}^2) + 
-            \frac{\exp(\log \sigma_{q,d}^2) + (\mu_{q,d} - \mu_{p,d})^2}{\exp(\log \sigma_{p,d}^2)} - 1 
+        \mathrm{KL}(q \,\|\, p) = \frac{1}{2} \sum_{d} \left(
+            (\log \sigma_{p,d}^2 - \log \sigma_{q,d}^2) +
+            \frac{\exp(\log \sigma_{q,d}^2) + (\mu_{q,d} - \mu_{p,d})^2}{\exp(\log \sigma_{p,d}^2)} - 1
         \right)
 
     Parameters
@@ -172,7 +172,7 @@ def kl_divergence_diag_gaussian(
         KL divergences of shape ``[B]`` when ``reduce_sum=True``, or
         ``[B, D_z]`` when ``reduce_sum=False``.
     """
-    
+
     if mu_p is None and log_var_p is None:
         # Closed form for KL(N(mu_q, exp(log_var_q)) || N(0, I)) — avoids allocating zero tensors.
         kl = 0.5 * (log_var_q.exp() + mu_q.pow(2) - 1 - log_var_q)

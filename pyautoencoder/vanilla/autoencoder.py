@@ -127,8 +127,8 @@ class AE(BaseAutoencoder):
         enc = self._encode(x)      # AEEncodeOutput(z)
         dec = self._decode(enc.z)  # AEDecodeOutput(x_hat)
         return AEOutput(x_hat=dec.x_hat, z=enc.z)
-    
-    def compute_loss(self, 
+
+    def compute_loss(self,
                      x: torch.Tensor,
                      output: AEOutput,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
@@ -164,7 +164,7 @@ class AE(BaseAutoencoder):
         Notes
         -----
         Reductions follow:
-        
+
         1. Elementwise log-likelihood.
         2. Sum over feature dimensions.
         3. Mean over the batch.
@@ -174,7 +174,7 @@ class AE(BaseAutoencoder):
         - Gaussian: continuous data (typically standardized).
         - Bernoulli: targets in :math:`[0, 1]`, predictions given as logits.
         """
-        
+
         x_hat = output.x_hat
         if isinstance(likelihood, str):
             likelihood = LikelihoodType(likelihood.lower())

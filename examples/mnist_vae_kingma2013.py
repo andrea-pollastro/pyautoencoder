@@ -2,7 +2,7 @@
 Reproduce the MNIST VAE experiment from Kingma & Welling (2013), Fig. 2.
 
 We train VAEs with different latent dimensionalities N_z and track the ELBO
-as a function of the number of training samples seen. 
+as a function of the number of training samples seen.
 The setup follows the original paper:
 
 - One hidden layer MLPs with Tanh activations in encoder/decoder
@@ -102,7 +102,7 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
         nn.Linear(latent_dim, hidden),
         nn.Tanh(),
         nn.Linear(hidden, 28 * 28),
-        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear; VAELoss(bernoulli) expects logits
+        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear: the Bernoulli likelihood expects logits
     )
 
     model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)

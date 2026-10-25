@@ -1,48 +1,11 @@
-.. Autoencoder Models
-.. ===================
-
-.. Vanilla Autoencoder
-.. -------------------
-
-.. .. autoclass:: pyautoencoder.vanilla.AE
-..    :members:
-..    :undoc-members:
-..    :show-inheritance:
-..    :exclude-members: build, _encode, _decode
-..    :special-members: __init__
-
-.. .. autoclass:: pyautoencoder.vanilla.AEEncodeOutput
-..    :members:
-..    :undoc-members:
-.. .. autoclass:: pyautoencoder.vanilla.AEDecodeOutput
-..    :members:
-..    :undoc-members:
-.. .. autoclass:: pyautoencoder.vanilla.AEOutput
-..    :members:
-..    :undoc-members:
-
-.. Variational Autoencoder
-.. -----------------------
-
-.. .. autoclass:: pyautoencoder.variational.VAE
-..    :members:
-..    :undoc-members:
-..    :show-inheritance:
-..    :exclude-members: build, _encode, _decode
-..    :special-members: __init__
-
-.. .. autoclass:: pyautoencoder.variational.VAEEncodeOutput
-..    :members:
-..    :undoc-members:
-.. .. autoclass:: pyautoencoder.variational.VAEDecodeOutput
-..    :members:
-..    :undoc-members:
-.. .. autoclass:: pyautoencoder.variational.VAEOutput
-..    :members:
-..    :undoc-members:
-
 Autoencoder Models
 ===================
+
+:class:`~pyautoencoder.vanilla.AE` and :class:`~pyautoencoder.variational.VAE`
+inherit :meth:`~pyautoencoder._base.BaseAutoencoder.build`,
+:meth:`~pyautoencoder._base.BaseAutoencoder.encode` and
+:meth:`~pyautoencoder._base.BaseAutoencoder.decode` from
+:class:`~pyautoencoder._base.BaseAutoencoder` (see :doc:`base`).
 
 Vanilla Autoencoder
 -------------------
@@ -51,7 +14,7 @@ Vanilla Autoencoder
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: build, _encode, _decode
+   :exclude-members: _encode, _decode
    :special-members: __init__
 
 .. rubric:: Data Structures
@@ -75,7 +38,7 @@ Variational Autoencoder
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: build, _encode, _decode
+   :exclude-members: _encode, _decode
    :special-members: __init__
 
 .. rubric:: Data Structures
@@ -99,5 +62,5 @@ Adaptive Group Variational Autoencoder
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: build, _encode, _decode
+   :exclude-members: _encode, _decode
    :special-members: __init__

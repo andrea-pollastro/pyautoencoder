@@ -5,4 +5,3 @@ Stochastic Layers
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: build

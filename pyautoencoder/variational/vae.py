@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from dataclasses import dataclass
 from ..loss.base import (
-    LikelihoodType, 
-    log_likelihood, 
-    kl_divergence_diag_gaussian, 
+    LikelihoodType,
+    log_likelihood,
+    kl_divergence_diag_gaussian,
     LossResult
 )
 from .._base.base import BaseAutoencoder, ModelOutput
@@ -212,13 +212,13 @@ class VAE(BaseAutoencoder):
         ``[B, S, ...]`` without materializing copies. For Bernoulli likelihoods,
         the decoder must output logits.
         """
-        
+
         enc = self._encode(x, S=S)
         dec = self._decode(enc.z)
         return VAEOutput(x_hat=dec.x_hat, z=enc.z, mu=enc.mu, log_var=enc.log_var)
-    
+
     def compute_loss(self,
-                     x: torch.Tensor, 
+                     x: torch.Tensor,
                      output: VAEOutput,
                      beta: float = 1,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
@@ -239,7 +239,7 @@ class VAE(BaseAutoencoder):
 
         Monte Carlo estimation
         ----------------------
-        If ``x_hat`` in ``output`` contains ``S`` Monte Carlo samples, 
+        If ``x_hat`` in ``output`` contains ``S`` Monte Carlo samples,
         the expectation :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
 
         .. math::
@@ -275,7 +275,7 @@ class VAE(BaseAutoencoder):
         -------
         LossResult
             Result containing:
-            
+
             * **objective** – Negative mean ELBO (scalar).
             * **diagnostics** – Dictionary of detached scalar tensors with:
 

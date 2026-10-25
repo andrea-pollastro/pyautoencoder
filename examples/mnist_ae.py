@@ -56,7 +56,7 @@ def make_autoencoder(latent_dim: int) -> AE:
         nn.Linear(latent_dim, 256),
         nn.ReLU(),
         nn.Linear(256, 28 * 28),
-        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear; AELoss(bernoulli) expects logits
+        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear: the Bernoulli likelihood expects logits
     )
     model = AE(encoder=encoder, decoder=decoder)
     model.build(input_sample=torch.randn(1, 1, 28, 28))
