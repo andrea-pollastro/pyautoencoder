@@ -62,7 +62,9 @@ Or install from source for development:
 ```bash
 git clone https://github.com/andrea-pollastro/pyautoencoder.git
 cd pyautoencoder
-pip install -e .
+pip install -e ".[dev]"   # package + test, docs and lint tools
+pytest                    # run the test suite
+ruff check .              # lint
 ```
 
 ## Quick start
