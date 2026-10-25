@@ -219,7 +219,7 @@ class VAE(BaseAutoencoder):
     
     def compute_loss(self,
                      x: torch.Tensor, 
-                     vae_output: VAEOutput,
+                     output: VAEOutput,
                      beta: float = 1,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute the Evidence Lower Bound (ELBO) for a (beta-)Variational Autoencoder.
@@ -239,7 +239,7 @@ class VAE(BaseAutoencoder):
 
         Monte Carlo estimation
         ----------------------
-        If ``x_hat`` in ``vae_output`` contains ``S`` Monte Carlo samples, 
+        If ``x_hat`` in ``output`` contains ``S`` Monte Carlo samples, 
         the expectation :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
 
         .. math::
@@ -257,7 +257,7 @@ class VAE(BaseAutoencoder):
         ----------
         x : torch.Tensor
             Ground-truth inputs of shape ``[B, ...]``.
-        vae_output : VAEOutput
+        output : VAEOutput
             Output from the VAE forward pass. Expected fields include:
 
             - ``x_hat`` (torch.Tensor): Reconstructed samples, shape ``[B, ...]`` or ``[B, S, ...]``.
@@ -294,9 +294,9 @@ class VAE(BaseAutoencoder):
           mode under :func:`torch.no_grad` (taking care of dropout and batch
           normalization layers, which also depend on the mode).
         """
-        x_hat = vae_output.x_hat
-        mu = vae_output.mu
-        log_var = vae_output.log_var
+        x_hat = output.x_hat
+        mu = output.mu
+        log_var = output.log_var
 
         if isinstance(likelihood, str):
             likelihood = LikelihoodType(likelihood.lower())
@@ -496,7 +496,7 @@ class AdaGVAE(nn.Module):
 
     def compute_loss(self,
                      x: tuple[torch.Tensor, torch.Tensor],
-                     vae_output: AdaGVAEOutput,
+                     output: AdaGVAEOutput,
                      beta: float = 1,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute the combined ELBO for a pair of inputs with adapted posteriors.
@@ -513,7 +513,7 @@ class AdaGVAE(nn.Module):
         ----------
         x : tuple[torch.Tensor, torch.Tensor]
             The ``(x1, x2)`` pair of ground-truth inputs, each of shape ``[B, ...]``.
-        vae_output : AdaGVAEOutput
+        output : AdaGVAEOutput
             Output from :meth:`forward`.
         beta : float, optional
             KL weighting factor. ``beta = 1`` yields the standard objective.
@@ -537,8 +537,8 @@ class AdaGVAE(nn.Module):
               - ``"kl_divergence_x2"``: Mean KL divergence for ``x2``.
         """
         x1, x2 = x
-        loss1 = self.vae.compute_loss(x=x1, vae_output=vae_output.output1, beta=beta, likelihood=likelihood)
-        loss2 = self.vae.compute_loss(x=x2, vae_output=vae_output.output2, beta=beta, likelihood=likelihood)
+        loss1 = self.vae.compute_loss(x=x1, output=output.output1, beta=beta, likelihood=likelihood)
+        loss2 = self.vae.compute_loss(x=x2, output=output.output2, beta=beta, likelihood=likelihood)
         return LossResult(
             objective=loss1.objective + loss2.objective,
             diagnostics={

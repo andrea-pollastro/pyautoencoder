@@ -130,7 +130,7 @@ class AE(BaseAutoencoder):
     
     def compute_loss(self, 
                      x: torch.Tensor,
-                     ae_output: AEOutput,
+                     output: AEOutput,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute Autoencoder reconstruction loss.
 
@@ -141,7 +141,7 @@ class AE(BaseAutoencoder):
         ----------
         x : torch.Tensor
             Ground-truth inputs of shape ``[B, ...]``.
-        ae_output : AEOutput
+        output : AEOutput
             Output from the AE forward pass. Expected fields include:
 
             - ``x_hat`` (torch.Tensor): Reconstructions, shape ``[B, ...]``.
@@ -175,7 +175,7 @@ class AE(BaseAutoencoder):
         - Bernoulli: targets in :math:`[0, 1]`, predictions given as logits.
         """
         
-        x_hat = ae_output.x_hat
+        x_hat = output.x_hat
         if isinstance(likelihood, str):
             likelihood = LikelihoodType(likelihood.lower())
         B = x.size(0)

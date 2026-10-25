@@ -832,8 +832,8 @@ def test_adagvae_compute_loss_equals_sum_of_individual_losses():
     out = adagvae.forward((x1, x2), S=S)
     pair_loss = adagvae.compute_loss((x1, x2), out)
 
-    loss1 = adagvae.vae.compute_loss(x=x1, vae_output=out.output1)
-    loss2 = adagvae.vae.compute_loss(x=x2, vae_output=out.output2)
+    loss1 = adagvae.vae.compute_loss(x=x1, output=out.output1)
+    loss2 = adagvae.vae.compute_loss(x=x2, output=out.output2)
 
     assert torch.allclose(pair_loss.objective, loss1.objective + loss2.objective, atol=1e-5)
     assert abs(
@@ -926,3 +926,15 @@ def test_adagvae_train_forward_shares_lowest_kl_dimension():
     shared = torch.isclose(out.output1.mu, out.output2.mu)
     assert shared.any(dim=1).all()
     assert not shared.all()
+
+
+def test_compute_loss_accepts_output_keyword_like_base_class():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    vae = _make_built_vae()
+    x1, x2 = torch.randn(3, 5), torch.randn(3, 5)
+
+    assert vae.compute_loss(x1, output=vae(x1)).objective.dim() == 0
+
+    adagvae = AdaGVAE(vae=vae)
+    assert adagvae.compute_loss((x1, x2), output=adagvae((x1, x2))).objective.dim() == 0

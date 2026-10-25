@@ -305,3 +305,12 @@ def test_ae_compute_loss_batch_size_one():
     assert loss_result.objective.dim() == 0
     assert not torch.isnan(loss_result.objective)
     assert not torch.isinf(loss_result.objective)
+
+
+def test_ae_compute_loss_accepts_output_keyword_like_base_class():
+    ae = AE(encoder=SimpleEncoder(4, 2), decoder=SimpleDecoder(2, 4))
+    x = torch.randn(3, 4)
+
+    loss = ae.compute_loss(x, output=ae(x))
+
+    assert loss.objective.dim() == 0
