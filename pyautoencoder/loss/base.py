@@ -31,14 +31,17 @@ class LossResult:
     objective : torch.Tensor
         Scalar loss to optimize (e.g., negative log-likelihood or negative ELBO).
         Maintains gradient information for backpropagation.
-    diagnostics : dict[str, float]
+    diagnostics : dict[str, torch.Tensor]
         Dictionary of scalar metrics for monitoring and logging.
-        Values are detached float scalars (not tensors) and do not track gradients.
+        Values are detached 0-dim tensors on the same device as the
+        objective; they do not track gradients. They are kept as tensors so
+        that computing them does not force a GPU-to-CPU synchronization at
+        every step: call ``.item()`` (or ``float(...)``) only when logging.
         Examples include log-likelihood, KL divergence, and ELBO.
     """
 
     objective: torch.Tensor
-    diagnostics: dict[str, float]
+    diagnostics: dict[str, torch.Tensor]
 
 def log_likelihood(x: torch.Tensor, 
                    x_hat: torch.Tensor, 

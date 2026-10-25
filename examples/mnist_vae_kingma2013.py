@@ -116,7 +116,7 @@ def average_elbo(dataloader: DataLoader, model: VAE) -> float:
     # The ELBO needs samples z ~ q(z|x), but in eval mode the VAE uses z = mu.
     # This model has no dropout or batch norm, so train mode only enables sampling.
     model.train()
-    total_elbo = 0.0
+    total_elbo = torch.zeros((), device=DEVICE)
     n = 0
 
     for x, _ in dataloader:
@@ -128,7 +128,7 @@ def average_elbo(dataloader: DataLoader, model: VAE) -> float:
         total_elbo += elbo_batch * batch_size
         n += batch_size
 
-    return total_elbo / n
+    return total_elbo.item() / n
 
 
 # ---------------- Training ------------------- #

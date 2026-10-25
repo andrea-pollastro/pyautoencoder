@@ -157,7 +157,7 @@ class AE(BaseAutoencoder):
             Result containing:
 
             * **objective** – Scalar batch-mean reconstruction NLL (in nats).
-            * **diagnostics** – Dictionary with:
+            * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"log_likelihood"``: Negative of the objective (batch-mean log-likelihood).
 
@@ -188,6 +188,6 @@ class AE(BaseAutoencoder):
         return LossResult(
             objective=nll,
             diagnostics={
-                'log_likelihood': -nll.item(),
+                'log_likelihood': -nll.detach(),
             }
         )

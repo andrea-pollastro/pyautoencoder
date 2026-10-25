@@ -105,7 +105,7 @@ class ToyAutoencoder(BaseAutoencoder):
 
     def compute_loss(self, x: torch.Tensor, output: AEForwardOutput, *args, **kwargs):
         mse = ((x - output.x_hat) ** 2).mean()
-        return LossResult(objective=mse, diagnostics={"mse": mse.item()})
+        return LossResult(objective=mse, diagnostics={"mse": mse.detach()})
 
 
 class ToyLazyAutoencoder(BaseAutoencoder):
@@ -131,7 +131,7 @@ class ToyLazyAutoencoder(BaseAutoencoder):
 
     def compute_loss(self, x: torch.Tensor, output: AEForwardOutput, *args, **kwargs):
         mse = ((x - output.x_hat) ** 2).mean()
-        return LossResult(objective=mse, diagnostics={"mse": mse.item()})
+        return LossResult(objective=mse, diagnostics={"mse": mse.detach()})
 
 
 def test_base_autoencoder_is_abstract():

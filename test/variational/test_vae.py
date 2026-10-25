@@ -11,6 +11,10 @@ from pyautoencoder.variational.vae import (
 )
 from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian
 
+
+def _is_detached_scalar(t) -> bool:
+    return isinstance(t, torch.Tensor) and t.dim() == 0 and not t.requires_grad
+
 class DummyEncoder(nn.Module):
     def __init__(self, in_features: int, feat_dim: int):
         super().__init__()
@@ -324,9 +328,9 @@ def test_vae_compute_loss_gaussian_likelihood_returns_correct_type():
     assert 'log_likelihood' in loss_result.diagnostics
     assert 'kl_divergence' in loss_result.diagnostics
 
-    assert isinstance(loss_result.diagnostics['elbo'], float)
-    assert isinstance(loss_result.diagnostics['log_likelihood'], float)
-    assert isinstance(loss_result.diagnostics['kl_divergence'], float)
+    assert _is_detached_scalar(loss_result.diagnostics['elbo'])
+    assert _is_detached_scalar(loss_result.diagnostics['log_likelihood'])
+    assert _is_detached_scalar(loss_result.diagnostics['kl_divergence'])
 
 
 def test_vae_compute_loss_objective_is_negative_elbo():
@@ -346,7 +350,7 @@ def test_vae_compute_loss_objective_is_negative_elbo():
 
     elbo = loss_result.diagnostics['elbo']
     objective = loss_result.objective.item()
-    assert torch.allclose(torch.tensor(objective), torch.tensor(-elbo), atol=1e-6)
+    assert torch.allclose(torch.tensor(objective), -elbo, atol=1e-6)
 
 
 def test_vae_compute_loss_with_beta_parameter():
@@ -684,11 +688,11 @@ def test_adagvae_compute_loss_returns_correct_structure():
     assert 'kl_divergence_x1' in loss_result.diagnostics
     assert 'kl_divergence_x2' in loss_result.diagnostics
 
-    assert isinstance(loss_result.diagnostics['elbo'], float)
-    assert isinstance(loss_result.diagnostics['log_likelihood_x1'], float)
-    assert isinstance(loss_result.diagnostics['log_likelihood_x2'], float)
-    assert isinstance(loss_result.diagnostics['kl_divergence_x1'], float)
-    assert isinstance(loss_result.diagnostics['kl_divergence_x2'], float)
+    assert _is_detached_scalar(loss_result.diagnostics['elbo'])
+    assert _is_detached_scalar(loss_result.diagnostics['log_likelihood_x1'])
+    assert _is_detached_scalar(loss_result.diagnostics['log_likelihood_x2'])
+    assert _is_detached_scalar(loss_result.diagnostics['kl_divergence_x1'])
+    assert _is_detached_scalar(loss_result.diagnostics['kl_divergence_x2'])
 
 
 def test_adagvae_compute_loss_backward_flows():

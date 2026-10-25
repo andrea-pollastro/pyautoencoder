@@ -280,7 +280,8 @@ The diagnostics dictionary exposes per-input reconstruction and KL terms
 all return a :class:`~pyautoencoder.loss.LossResult` with:
 
 - **objective** – scalar loss to optimize (backward-differentiable)
-- **diagnostics** – dictionary of scalar metrics (float values)
+- **diagnostics** – dictionary of scalar metrics, as detached 0-dim tensors
+  (call ``.item()`` when logging; this avoids a GPU sync at every step)
 
 Example:
 
@@ -289,7 +290,7 @@ Example:
     loss_result = model.compute_loss(x, output)
     loss_result.objective.backward()              # Optimize this
     for name, val in loss_result.diagnostics.items():
-        log(name, val)                            # Monitor these
+        log(name, val.item())                     # Monitor these
 
 
 Key Design Principles
@@ -327,7 +328,7 @@ Loss functions are methods on the models themselves, providing a clean API:
     loss_result = model.compute_loss(x_batch, output)
     loss_result.objective.backward()              # Optimize this
     for name, val in loss_result.diagnostics.items():
-        log(name, val)                            # Monitor these
+        log(name, val.item())                     # Monitor these
 
 **Consistent Interfaces**
 

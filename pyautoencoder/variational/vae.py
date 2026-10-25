@@ -277,7 +277,7 @@ class VAE(BaseAutoencoder):
             Result containing:
             
             * **objective** – Negative mean ELBO (scalar).
-            * **diagnostics** – Dictionary with:
+            * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"elbo"``: Mean ELBO over the batch.
               - ``"log_likelihood"``: Mean reconstruction term :math:`\mathbb{E}_{q}[\log p(x \mid z)]`.
@@ -329,9 +329,9 @@ class VAE(BaseAutoencoder):
         return LossResult(
             objective = -elbo,
             diagnostics = {
-                'elbo': elbo.item(),
-                'log_likelihood': E_log_px_z.mean().item(),
-                'kl_divergence': kl_q_p.mean().item(),
+                'elbo': elbo.detach(),
+                'log_likelihood': E_log_px_z.mean().detach(),
+                'kl_divergence': kl_q_p.mean().detach(),
             }
         )
 
@@ -528,7 +528,7 @@ class AdaGVAE(nn.Module):
             Result containing:
 
             * **objective** – Sum of negative ELBOs for both inputs (scalar).
-            * **diagnostics** – Dictionary with:
+            * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"elbo"``: Sum of mean ELBOs for both inputs.
               - ``"log_likelihood_x1"``: Mean reconstruction term for ``x1``.

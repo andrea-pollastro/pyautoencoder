@@ -186,7 +186,8 @@ def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
 
     assert isinstance(loss_result.diagnostics, dict)
     assert 'log_likelihood' in loss_result.diagnostics
-    assert isinstance(loss_result.diagnostics['log_likelihood'], float)
+    ll = loss_result.diagnostics['log_likelihood']
+    assert isinstance(ll, torch.Tensor) and ll.dim() == 0 and not ll.requires_grad
 
 
 def test_ae_compute_loss_gaussian_nll_equals_half_mse():
@@ -275,7 +276,7 @@ def test_ae_compute_loss_diagnostics_log_likelihood_negative_of_objective():
 
     nll = loss_result.objective.item()
     ll = loss_result.diagnostics['log_likelihood']
-    assert torch.allclose(torch.tensor(ll), torch.tensor(-nll), atol=1e-6)
+    assert torch.allclose(ll, torch.tensor(-nll), atol=1e-6)
 
 
 def test_ae_compute_loss_rejects_mismatched_shapes():
