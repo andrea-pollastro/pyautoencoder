@@ -84,17 +84,32 @@ The :class:`~pyautoencoder.variational.VAE` implements the VAE framework
     loss_result = model.compute_loss(x_batch, output, beta=1.0, likelihood='gaussian')
     loss_result.objective.backward()
 
-**Training vs Evaluation**
+**Sampling vs Posterior Mean**
 
-- **Training mode** (:code:`model.train()`):
-  - Samples :math:`S` latent codes per input
-  - Enables Monte Carlo averaging of reconstruction loss
-  - Returns shape :math:`[B, S, D_z]` for latents
+Whether :math:`z` is sampled is chosen with the ``sample`` argument, not with
+:code:`model.train()` / :code:`model.eval()` (which only affect layers such as
+dropout and batch normalization):
 
-- **Evaluation mode** (:code:`model.eval()`):
-  - Deterministic output (uses means, no sampling)
-  - Faster inference
-  - Still computes :math:`\mu` and :math:`\log\sigma^2` for diagnostics
+- :code:`model(x, S=5)` – samples :math:`S` latent codes per input
+  (``sample=True`` is the default of ``forward``, in train and eval mode alike).
+  ``compute_loss`` on this output is a Monte Carlo estimate of the ELBO, also
+  for validation data.
+- :code:`model.encode(x)` – inference: no gradients and :math:`z = \mu` by
+  default (``sample=False``), with shape :math:`[B, 1, D_z]`. Use
+  :code:`model.encode(x, S=10, sample=True)` to draw samples instead.
+- :code:`model(x, sample=False)` – :math:`z = \mu` in the full forward pass.
+  ``S`` must be 1 in this case.
+
+.. code-block:: python
+
+    # Validation ELBO (e.g. for early stopping)
+    model.eval()
+    with torch.no_grad():
+        val_loss = model.compute_loss(x_val, model(x_val))
+
+    # Inference: posterior mean and deterministic reconstruction
+    enc = model.encode(x)
+    x_rec = model.decode(enc.z).x_hat
 
 **Output Structure**
 
@@ -142,6 +157,10 @@ per-dimension KL values:
 .. math::
 
     \tau = \tfrac{1}{2}(\max_d \mathrm{KL}_d + \min_d \mathrm{KL}_d)
+
+The alignment only affects training. In eval mode (:code:`model.eval()`) no
+grouping is applied: each input goes through the wrapped VAE's ``forward``
+independently.
 
 **Training**
 
@@ -271,7 +290,8 @@ The diagnostics dictionary exposes per-input reconstruction and KL terms
 all return a :class:`~pyautoencoder.loss.LossResult` with:
 
 - **objective** – scalar loss to optimize (backward-differentiable)
-- **diagnostics** – dictionary of scalar metrics (float values)
+- **diagnostics** – dictionary of scalar metrics, as detached 0-dim tensors
+  (call ``.item()`` when logging; this avoids a GPU sync at every step)
 
 Example:
 
@@ -280,7 +300,7 @@ Example:
     loss_result = model.compute_loss(x, output)
     loss_result.objective.backward()              # Optimize this
     for name, val in loss_result.diagnostics.items():
-        log(name, val)                            # Monitor these
+        log(name, val.item())                     # Monitor these
 
 
 Key Design Principles
@@ -318,7 +338,7 @@ Loss functions are methods on the models themselves, providing a clean API:
     loss_result = model.compute_loss(x_batch, output)
     loss_result.objective.backward()              # Optimize this
     for name, val in loss_result.diagnostics.items():
-        log(name, val)                            # Monitor these
+        log(name, val.item())                     # Monitor these
 
 **Consistent Interfaces**
 

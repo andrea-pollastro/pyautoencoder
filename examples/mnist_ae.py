@@ -56,7 +56,7 @@ def make_autoencoder(latent_dim: int) -> AE:
         nn.Linear(latent_dim, 256),
         nn.ReLU(),
         nn.Linear(256, 28 * 28),
-        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear; AELoss(bernoulli) expects logits
+        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear: the Bernoulli likelihood expects logits
     )
     model = AE(encoder=encoder, decoder=decoder)
     model.build(input_sample=torch.randn(1, 1, 28, 28))
@@ -75,7 +75,7 @@ def train(
 
     start_time = time.time()
     for epoch in range(1, num_epochs + 1):
-        running_log_likelihood = 0.0
+        running_log_likelihood = torch.zeros((), device=DEVICE)
         n = 0
 
         for x, _ in train_loader:
@@ -91,7 +91,7 @@ def train(
             running_log_likelihood += loss_info.diagnostics['log_likelihood'] * batch_size
             n += batch_size
 
-        avg_NLL = running_log_likelihood / n
+        avg_NLL = running_log_likelihood.item() / n  # one GPU sync per epoch
         elapsed = time.time() - start_time
 
         print(

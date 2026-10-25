@@ -2,7 +2,7 @@
 Reproduce the MNIST VAE experiment from Kingma & Welling (2013), Fig. 2.
 
 We train VAEs with different latent dimensionalities N_z and track the ELBO
-as a function of the number of training samples seen. 
+as a function of the number of training samples seen.
 The setup follows the original paper:
 
 - One hidden layer MLPs with Tanh activations in encoder/decoder
@@ -102,7 +102,7 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
         nn.Linear(latent_dim, hidden),
         nn.Tanh(),
         nn.Linear(hidden, 28 * 28),
-        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear; VAELoss(bernoulli) expects logits
+        nn.Unflatten(-1, (1, 28, 28)),  # keep last layer linear: the Bernoulli likelihood expects logits
     )
 
     model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
@@ -113,8 +113,8 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
 # ---------------- Evaluation ----------------- #
 @torch.no_grad()
 def average_elbo(dataloader: DataLoader, model: VAE) -> float:
-    model.eval()
-    total_elbo = 0.0
+    model.eval()  # forward still samples z ~ q(z|x), so this is an ELBO estimate
+    total_elbo = torch.zeros((), device=DEVICE)
     n = 0
 
     for x, _ in dataloader:
@@ -126,7 +126,7 @@ def average_elbo(dataloader: DataLoader, model: VAE) -> float:
         total_elbo += elbo_batch * batch_size
         n += batch_size
 
-    return total_elbo / n
+    return total_elbo.item() / n
 
 
 # ---------------- Training ------------------- #

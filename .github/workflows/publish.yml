@@ -5,9 +5,21 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+
   build-and-publish:
+    needs: tests
     runs-on: ubuntu-latest
+    # Restrict publishing to this environment: configure the same name in the
+    # PyPI trusted publisher settings, and optionally add protection rules on GitHub.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pyautoencoder/
     permissions:
       id-token: write
       contents: read
@@ -15,11 +27,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools-scm needs the tags to compute the version
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install build tooling
         run: |

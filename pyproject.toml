@@ -7,7 +7,8 @@ name = "pyautoencoder"
 description = "A Python package offering implementations of state-of-the-art autoencoder architectures in PyTorch."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 
 authors = [
   { name = "Andrea Pollastro" },
@@ -27,7 +28,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Intended Audience :: Science/Research",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
@@ -37,6 +37,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
 ]
 
 dependencies = [
@@ -44,6 +45,11 @@ dependencies = [
 ]
 
 dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+docs = ["sphinx", "pydata-sphinx-theme"]
+dev = ["pyautoencoder[test,docs]", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/andrea-pollastro/pyautoencoder"
@@ -54,5 +60,19 @@ Documentation = "https://andrea-pollastro.github.io/pyautoencoder/"
 where = ["."]
 include = ["pyautoencoder*"]
 
+[tool.setuptools.package-data]
+pyautoencoder = ["py.typed"]
+
 [tool.setuptools_scm]
-write_to = "pyautoencoder/_version.py"
+version_file = "pyautoencoder/_version.py"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+# Import the package from this checkout, not from a (possibly stale) installed copy.
+pythonpath = ["."]

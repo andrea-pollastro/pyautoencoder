@@ -3,6 +3,12 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+import sys
+
+# Add the project root (the folder that contains "pyautoencoder/") to sys.path
+sys.path.insert(0, os.path.abspath("../.."))
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -19,7 +25,6 @@ extensions = [
     "sphinx.ext.mathjax",
 ]
 
-templates_path = ['_templates']
 exclude_patterns = []
 
 
@@ -29,7 +34,6 @@ exclude_patterns = []
 
 html_theme = "pydata_sphinx_theme"
 html_logo = "../../assets/logo_nobackground.png"
-html_static_path = ['_static']
 
 html_theme_options = {
     "logo": {
@@ -44,9 +48,3 @@ html_sidebars = {
     "getting_started": [],
     "architecture": [],
 }
-
-import os
-import sys
-
-# Add the project root (the folder that contains "pyautoencoder/") to sys.path
-sys.path.insert(0, os.path.abspath("../.."))

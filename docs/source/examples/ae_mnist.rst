@@ -16,7 +16,7 @@ reproducibility.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 1-33
+   :end-before: # ---------------- Data
 
 Key elements in this section include:
 
@@ -36,7 +36,7 @@ used to map images to the :math:`[0, 1]` range.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 37-44
+   :pyobject: make_dataloaders
 
 The :func:`make_dataloaders` function returns two
 :class:`torch.utils.data.DataLoader` objects that supply batches to the
@@ -54,7 +54,7 @@ the image from this latent vector.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 48-63
+   :pyobject: make_autoencoder
 
 Notes:
 
@@ -75,7 +75,7 @@ the reconstruction log-likelihood and related diagnostics.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 66-101
+   :pyobject: train
 
 For each batch:
 
@@ -100,7 +100,7 @@ a sigmoid to convert them to pixel intensities suitable for display.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 105-145
+   :pyobject: plot_test_reconstructions
 
 
 Putting It All Together
@@ -113,14 +113,14 @@ test-set reconstructions.
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 149-165
+   :pyobject: main
 
 The script can also be executed directly:
 
 .. literalinclude:: ../../../examples/mnist_ae.py
    :language: python
    :linenos:
-   :lines: 168-169
+   :start-at: if __name__ == "__main__":
 
 
 Full Example Script

@@ -62,7 +62,9 @@ Or install from source for development:
 ```bash
 git clone https://github.com/andrea-pollastro/pyautoencoder.git
 cd pyautoencoder
-pip install -e .
+pip install -e ".[dev]"   # package + test, docs and lint tools
+pytest                    # run the test suite
+ruff check .              # lint
 ```
 
 ## Quick start
@@ -96,8 +98,8 @@ for x in dataloader:
     loss_results.objective.backward() # negative ELBO
     optimizer.step()
     # optional: log components
-    log_likelihood = loss_results.diagnostics["log_likelihood"]
-    kl_divergence = loss_results.diagnostics["kl_divergence"]
+    log_likelihood = loss_results.diagnostics["log_likelihood"].item()
+    kl_divergence = loss_results.diagnostics["kl_divergence"].item()
 ```
 
 ## Examples

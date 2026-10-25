@@ -61,7 +61,6 @@ def test_ae_training_forward_encode_decode_shapes_and_types():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
 
     enc_out = ae._encode(x)
     assert isinstance(enc_out, AEEncodeOutput)
@@ -95,7 +94,6 @@ def test_ae_forward_calls_encoder_then_decoder_consistently():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
 
     enc_out = ae._encode(x)
     dec_out = ae._decode(enc_out.z)
@@ -118,7 +116,6 @@ def test_ae_inference_encode_decode_use_inference_mode_no_grad():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
     assert torch.is_grad_enabled() is True
 
     encode_out = ae.encode(x)
@@ -171,7 +168,6 @@ def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
     ae_output = ae.forward(x)
 
     loss_result = ae.compute_loss(x, ae_output)
@@ -186,7 +182,8 @@ def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
 
     assert isinstance(loss_result.diagnostics, dict)
     assert 'log_likelihood' in loss_result.diagnostics
-    assert isinstance(loss_result.diagnostics['log_likelihood'], float)
+    ll = loss_result.diagnostics['log_likelihood']
+    assert isinstance(ll, torch.Tensor) and ll.dim() == 0 and not ll.requires_grad
 
 
 def test_ae_compute_loss_gaussian_nll_equals_half_mse():
@@ -200,7 +197,6 @@ def test_ae_compute_loss_gaussian_nll_equals_half_mse():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
     ae_output = ae.forward(x)
 
     loss_result = ae.compute_loss(x, ae_output, likelihood='gaussian')
@@ -245,7 +241,6 @@ def test_ae_compute_loss_backward_flows_through_all_params():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
     ae_output = ae.forward(x)
 
     loss_result = ae.compute_loss(x, ae_output)
@@ -268,14 +263,22 @@ def test_ae_compute_loss_diagnostics_log_likelihood_negative_of_objective():
 
     x = torch.randn(batch_size, in_features)
 
-    torch.set_grad_enabled(True)
     ae_output = ae.forward(x)
 
     loss_result = ae.compute_loss(x, ae_output)
 
     nll = loss_result.objective.item()
     ll = loss_result.diagnostics['log_likelihood']
-    assert torch.allclose(torch.tensor(ll), torch.tensor(-nll), atol=1e-6)
+    assert torch.allclose(ll, torch.tensor(-nll), atol=1e-6)
+
+
+def test_ae_compute_loss_rejects_mismatched_shapes():
+    ae = AE(encoder=nn.Identity(), decoder=nn.Identity())
+    x = torch.zeros(4)
+    ae_output = AEOutput(x_hat=torch.arange(4.0).unsqueeze(1), z=x)  # [4, 1] vs [4]
+
+    with pytest.raises(ValueError, match="same shape"):
+        ae.compute_loss(x, ae_output, likelihood='gaussian')
 
 
 def test_ae_compute_loss_batch_size_one():
@@ -288,7 +291,6 @@ def test_ae_compute_loss_batch_size_one():
 
     x = torch.randn(1, in_features)
 
-    torch.set_grad_enabled(True)
     ae_output = ae.forward(x)
 
     loss_result = ae.compute_loss(x, ae_output)
@@ -296,3 +298,12 @@ def test_ae_compute_loss_batch_size_one():
     assert loss_result.objective.dim() == 0
     assert not torch.isnan(loss_result.objective)
     assert not torch.isinf(loss_result.objective)
+
+
+def test_ae_compute_loss_accepts_output_keyword_like_base_class():
+    ae = AE(encoder=SimpleEncoder(4, 2), decoder=SimpleDecoder(2, 4))
+    x = torch.randn(3, 4)
+
+    loss = ae.compute_loss(x, output=ae(x))
+
+    assert loss.objective.dim() == 0

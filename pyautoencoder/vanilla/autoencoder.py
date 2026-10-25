@@ -127,10 +127,10 @@ class AE(BaseAutoencoder):
         enc = self._encode(x)      # AEEncodeOutput(z)
         dec = self._decode(enc.z)  # AEDecodeOutput(x_hat)
         return AEOutput(x_hat=dec.x_hat, z=enc.z)
-    
-    def compute_loss(self, 
+
+    def compute_loss(self,
                      x: torch.Tensor,
-                     ae_output: AEOutput,
+                     output: AEOutput,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
         r"""Compute Autoencoder reconstruction loss.
 
@@ -141,7 +141,7 @@ class AE(BaseAutoencoder):
         ----------
         x : torch.Tensor
             Ground-truth inputs of shape ``[B, ...]``.
-        ae_output : AEOutput
+        output : AEOutput
             Output from the AE forward pass. Expected fields include:
 
             - ``x_hat`` (torch.Tensor): Reconstructions, shape ``[B, ...]``.
@@ -157,14 +157,14 @@ class AE(BaseAutoencoder):
             Result containing:
 
             * **objective** – Scalar batch-mean reconstruction NLL (in nats).
-            * **diagnostics** – Dictionary with:
+            * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"log_likelihood"``: Negative of the objective (batch-mean log-likelihood).
 
         Notes
         -----
         Reductions follow:
-        
+
         1. Elementwise log-likelihood.
         2. Sum over feature dimensions.
         3. Mean over the batch.
@@ -174,8 +174,8 @@ class AE(BaseAutoencoder):
         - Gaussian: continuous data (typically standardized).
         - Bernoulli: targets in :math:`[0, 1]`, predictions given as logits.
         """
-        
-        x_hat = ae_output.x_hat
+
+        x_hat = output.x_hat
         if isinstance(likelihood, str):
             likelihood = LikelihoodType(likelihood.lower())
         B = x.size(0)
@@ -188,6 +188,6 @@ class AE(BaseAutoencoder):
         return LossResult(
             objective=nll,
             diagnostics={
-                'log_likelihood': -nll.item(),
+                'log_likelihood': -nll.detach(),
             }
         )

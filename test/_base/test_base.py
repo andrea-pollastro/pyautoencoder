@@ -105,7 +105,7 @@ class ToyAutoencoder(BaseAutoencoder):
 
     def compute_loss(self, x: torch.Tensor, output: AEForwardOutput, *args, **kwargs):
         mse = ((x - output.x_hat) ** 2).mean()
-        return LossResult(objective=mse, diagnostics={"mse": mse.item()})
+        return LossResult(objective=mse, diagnostics={"mse": mse.detach()})
 
 
 class ToyLazyAutoencoder(BaseAutoencoder):
@@ -131,7 +131,7 @@ class ToyLazyAutoencoder(BaseAutoencoder):
 
     def compute_loss(self, x: torch.Tensor, output: AEForwardOutput, *args, **kwargs):
         mse = ((x - output.x_hat) ** 2).mean()
-        return LossResult(objective=mse, diagnostics={"mse": mse.item()})
+        return LossResult(objective=mse, diagnostics={"mse": mse.detach()})
 
 
 def test_base_autoencoder_is_abstract():
@@ -143,7 +143,6 @@ def test_build_runs_forward_under_no_grad():
     model = ToyAutoencoder()
     x = torch.randn(4, model.in_dim)
 
-    torch.set_grad_enabled(True)
     model.build(x)
 
     # build() is @torch.no_grad(), so forward sees grad disabled
@@ -156,7 +155,6 @@ def test_training_paths_use_grad_encode_decode_forward():
     model = ToyAutoencoder()
     x = torch.randn(5, model.in_dim)
 
-    torch.set_grad_enabled(True)
 
     out_f = model.forward(x)
     assert isinstance(out_f, AEForwardOutput)
@@ -181,7 +179,6 @@ def test_inference_encode_decode_use_inference_mode_no_grad():
     model = ToyAutoencoder()
     x = torch.randn(5, model.in_dim)
 
-    torch.set_grad_enabled(True)
     assert torch.is_grad_enabled() is True
 
     encode_out = model.encode(x)
@@ -204,21 +201,85 @@ def test_inference_encode_decode_use_inference_mode_no_grad():
     assert torch.is_grad_enabled() is True
 
 
-def test_load_state_dict_raises_for_uninitialized_lazy_modules():
-    model = ToyLazyAutoencoder()
+def test_load_state_dict_into_unbuilt_lazy_model():
+    x = torch.randn(4, 5)
+    src = ToyLazyAutoencoder()
+    src.build(x)
 
-    with pytest.raises(RuntimeError, match="Call build\\(\\) before load_state_dict"):
-        model.load_state_dict({})
+    # No build() needed: PyTorch materializes lazy layers from the state dict
+    dst = ToyLazyAutoencoder()
+    result = dst.load_state_dict(src.state_dict(), strict=True)
+
+    assert result.missing_keys == [] and result.unexpected_keys == []
+    for (name, p_src), p_dst in zip(src.state_dict().items(), dst.state_dict().values(), strict=True):
+        assert torch.equal(p_src, p_dst), name
+    assert torch.equal(dst(x).x_hat, src(x).x_hat)
 
 
 def test_load_state_dict_works_after_build():
-    model1 = ToyAutoencoder()
-    x = torch.randn(4, model1.in_dim)
-    model1.build(x)
-    state = model1.state_dict()
+    x = torch.randn(4, 5)
+    src = ToyLazyAutoencoder()
+    src.build(x)
 
-    model2 = ToyAutoencoder()
-    model2.build(x)
+    dst = ToyLazyAutoencoder()
+    dst.build(x)
+    dst.load_state_dict(src.state_dict(), strict=True)
 
-    result = model2.load_state_dict(state, strict=True, assign=False)
-    assert result is not None
+    assert torch.equal(dst(x).x_hat, src(x).x_hat)
+
+
+# ================= build side effects =================
+
+class ToyBatchNormAutoencoder(ToyLazyAutoencoder):
+    """Lazy autoencoder with BatchNorm and Dropout in the encoder."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.LazyLinear(self.latent_dim),
+            nn.LazyBatchNorm1d(),
+            nn.Dropout(p=0.5),
+        )
+
+
+def test_build_does_not_update_batchnorm_running_stats():
+    model = ToyBatchNormAutoencoder()
+    model.build(torch.randn(8, 5) + 10.0)
+
+    bn = model.encoder[1]
+    assert isinstance(bn, nn.BatchNorm1d)  # materialized
+    assert int(bn.num_batches_tracked) == 0
+    assert torch.equal(bn.running_mean, torch.zeros_like(bn.running_mean))
+    assert torch.equal(bn.running_var, torch.ones_like(bn.running_var))
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_build_restores_training_mode(training):
+    model = ToyBatchNormAutoencoder()
+    model.train(training)
+
+    model.build(torch.randn(8, 5))
+
+    assert all(m.training is training for m in model.modules())
+
+
+def test_build_restores_mixed_submodule_modes():
+    model = ToyBatchNormAutoencoder()
+    model.train()
+    model.encoder[2].eval()  # dropout frozen by the user
+
+    model.build(torch.randn(8, 5))
+
+    assert model.training is True
+    assert model.encoder[1].training is True
+    assert model.encoder[2].training is False
+
+
+def test_build_restores_mode_when_forward_fails():
+    model = ToyBatchNormAutoencoder()
+    model.train()
+
+    with pytest.raises(ValueError):
+        model.build(torch.randn(8, 5, 3, 2))  # BatchNorm1d rejects 4D input
+
+    assert all(m.training for m in model.modules())

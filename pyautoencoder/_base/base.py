@@ -1,15 +1,13 @@
 from typing import Any
-from collections.abc import Mapping
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
-from torch.nn.modules.lazy import LazyModuleMixin
 
 from ..loss.base import LossResult
 
 @dataclass(slots=True)
-class ModelOutput(ABC):
+class ModelOutput:
     """Base class for autoencoder outputs with a concise, tensor-aware ``repr``.
 
     Subclasses are dataclasses that group together tensors and auxiliary values
@@ -40,7 +38,7 @@ class ModelOutput(ABC):
                 s = repr(value)
                 parts.append(f"{name}={s}")
         return f"{self.__class__.__name__}({', '.join(parts)})"
-    
+
 class BaseAutoencoder(nn.Module, ABC):
     """Base class for autoencoders.
 
@@ -73,11 +71,16 @@ class BaseAutoencoder(nn.Module, ABC):
     * :meth:`encode` – calls :meth:`_encode` without tracking gradients.
     * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
 
+    Subclasses may override them to set inference-friendly defaults (for
+    example :meth:`VAE.encode` returns the posterior mean by default).
+
     Build step
     ----------
     :meth:`build` performs a no-grad forward pass with a representative input
     to materialize any lazy (size-inferred) layers. Call it once before
-    training or loading a state dict.
+    training, e.g. before creating the optimizer or applying a custom weight
+    initialization. Loading a state dict does not require it: PyTorch
+    materializes lazy layers from the loaded tensors.
     """
 
     def __init__(self) -> None:
@@ -155,7 +158,7 @@ class BaseAutoencoder(nn.Module, ABC):
 
         pass
 
-    # --- inference-only convenience wrappers (no grad; optional eval mode) ---
+    # --- inference-only convenience wrappers (no grad) ---
     @torch.inference_mode()
     def encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Encode inputs without tracking gradients.
@@ -207,59 +210,34 @@ class BaseAutoencoder(nn.Module, ABC):
         """
 
         return self._decode(z, *args, **kwargs)
-    
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False):
-        """Load a state dict, raising an error if lazy layers have not been built.
 
-        Parameters
-        ----------
-        state_dict : Mapping[str, Any]
-            State dictionary to load.
-        strict : bool, optional
-            Whether to strictly enforce that the keys in ``state_dict`` match
-            the keys returned by this module's :meth:`state_dict`. Defaults to ``True``.
-        assign : bool, optional
-            Whether to assign tensors instead of copying them. Defaults to ``False``.
-
-        Returns
-        -------
-        torch.nn.modules.module._IncompatibleKeys
-            Named tuple with ``missing_keys`` and ``unexpected_keys`` fields,
-            as returned by :meth:`torch.nn.Module.load_state_dict`.
-
-        Raises
-        ------
-        RuntimeError
-            If any :class:`~torch.nn.modules.lazy.LazyModuleMixin` submodule has
-            not yet been materialized. Call :meth:`build` first.
-        """
-        uninitialized = [
-            name for name, m in self.named_modules()
-            if isinstance(m, LazyModuleMixin)
-        ]
-        if uninitialized:
-            raise RuntimeError(
-                f"Call build() before load_state_dict(). "
-                f"Uninitialized modules: {uninitialized}"
-            )
-        return super().load_state_dict(state_dict, strict=strict, assign=assign)
-    
     @torch.no_grad()
     def build(self, input_sample: torch.Tensor) -> None:
         """Materialize lazy layers with a representative input.
 
         Performs a no-grad forward pass so that any
         :class:`~torch.nn.modules.lazy.LazyModuleMixin` layers infer their
-        shapes. Call this once before training or loading a state dict.
+        shapes. Call this once before training, e.g. before creating the
+        optimizer or applying a custom weight initialization.
+
+        The pass runs in eval mode, so it does not update BatchNorm running
+        statistics and does not apply dropout. The train/eval mode of every
+        submodule is restored afterwards.
 
         Parameters
         ----------
         input_sample : torch.Tensor
             A representative input batch (e.g., a single batch from the
-            training set). Only the shape matters; values are not used.
+            training set). Only its shape matters.
         """
-        self(input_sample)
-    
+        modes = {m: m.training for m in self.modules()}
+        self.eval()
+        try:
+            self(input_sample)
+        finally:
+            for m, training in modes.items():
+                m.training = training
+
     @abstractmethod
     def compute_loss(self, x: torch.Tensor, output: ModelOutput, *args: Any, **kwargs: Any) -> LossResult:
         """Compute the loss for the autoencoder.
