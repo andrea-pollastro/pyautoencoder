@@ -89,9 +89,9 @@ decoder = nn.Sequential(
 
 # Model
 vae = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
-
+vae.build(torch.randn(1, 784))  # materialize the lazy layers before creating the optimizer
 optimizer = torch.optim.Adam(vae.parameters())
-for x in dataloader:
+for x in dataloader:  # assuming x of shape [B, 784] with values in [0, 1] (e.g. flattened MNIST)
     optimizer.zero_grad()
     out = vae(x)
     loss_results = vae.compute_loss(x, out, beta=1, likelihood='bernoulli')
