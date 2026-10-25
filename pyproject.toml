@@ -48,6 +48,7 @@ dynamic = ["version"]
 [project.urls]
 Homepage = "https://github.com/andrea-pollastro/pyautoencoder"
 Repository = "https://github.com/andrea-pollastro/pyautoencoder"
+Documentation = "https://andrea-pollastro.github.io/pyautoencoder/"
 
 [tool.setuptools.packages.find]
 where = ["."]

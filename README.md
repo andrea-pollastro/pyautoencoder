@@ -12,7 +12,7 @@ A clean, modular PyTorch-based library for building and training autoencoders.
   <a href="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/publish.yml/badge.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
   <a href="https://pepy.tech/project/pyautoencoder"><img alt="Downloads" src="https://pepy.tech/badge/pyautoencoder"></a>
-  <a href="https://pyautoencoder.readthedocs.io/en/latest/"><img alt="Documentation Status" src="https://readthedocs.org/projects/pyautoencoder/badge/?version=latest"></a>
+  <a href="https://andrea-pollastro.github.io/pyautoencoder/"><img alt="Docs" src="https://github.com/andrea-pollastro/pyautoencoder/actions/workflows/docs.yml/badge.svg"></a>
   <a href="https://github.com/andrea-pollastro/pyautoencoder/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/andrea-pollastro/pyautoencoder?style=social"></a>
 </p>
 
@@ -47,9 +47,7 @@ PyAutoencoder is designed to offer **simple and easy access to autoencoder frame
 
 Full documentation (installation, tutorials, API reference, and examples) is available at:
 
-👉 **https://pyautoencoder.readthedocs.io/en/latest/**
-
-Also available on GitHub Pages: **https://andrea-pollastro.github.io/pyautoencoder/**
+👉 **https://andrea-pollastro.github.io/pyautoencoder/**
 
 ---
 
@@ -109,7 +107,7 @@ The [`examples/`](examples/) directory contains runnable scripts, including:
 - **`mnist_ae.py`** – standard Autoencoder on MNIST  
 - **`mnist_vae_kingma2013.py`** – reproduction of the MNIST VAE experiment from **Kingma & Welling (2013), Fig. 2**
 
-These examples are also documented and explained in the [online documentation](https://pyautoencoder.readthedocs.io/en/latest/).
+These examples are also documented and explained in the [online documentation](https://andrea-pollastro.github.io/pyautoencoder/).
 
 ---
 
