@@ -29,7 +29,7 @@ hyperparameters, and device configuration.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 1-64
+   :end-before: # ---------------- Data
 
 Key parameters:
 
@@ -49,7 +49,7 @@ AEVB experiments.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 68-90
+   :pyobject: make_dataloaders
 
 The :func:`make_dataloaders` function returns training and test dataloaders
 with appropriate preprocessing and optional binarization.
@@ -71,7 +71,7 @@ Weights are initialized with a small Gaussian as described in the paper.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 94-111
+   :pyobject: make_vae
 
 The model is built explicitly via :meth:`VAE.build`, which infers
 dimension-dependent components from a representative input sample.
@@ -86,7 +86,7 @@ diagnostics returned by :meth:`VAE.compute_loss`.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 114-129
+   :pyobject: average_elbo
 
 This routine is used during training to record both training and test
 ELBO values.
@@ -103,7 +103,7 @@ train and test sets are logged.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 133-186
+   :pyobject: train_one_setting
 
 Each training step:
 
@@ -129,7 +129,7 @@ appearance of Fig. 2 from Kingma & Welling (2013).
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 190-230
+   :pyobject: plot_elbo_curves
 
 The figure is saved as ``vae_mnist_fig2_repro.png``.
 
@@ -144,14 +144,14 @@ plotting the final curves.
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 234-248
+   :pyobject: main
 
 The script can be executed directly:
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
    :linenos:
-   :lines: 250-251
+   :start-at: if __name__ == "__main__":
 
 
 Full Example Script
