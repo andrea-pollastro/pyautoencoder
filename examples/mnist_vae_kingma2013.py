@@ -9,8 +9,8 @@ The setup follows the original paper:
 - Hidden size H = 500
 - Mini-batch size M = 100
 - Adagrad, learning rate selected from {0.01, 0.02, 0.1} (we use 0.02 here)
-- Small weight decay corresponding to a prior p(theta) = N(0, I) on the
-  generative (decoder) parameters theta
+- All parameters initialized from N(0, 0.01) (variance 0.01, i.e. std 0.1)
+- Small weight decay corresponding to a prior N(0, I) on all parameters
 - L = 1 Monte Carlo sample for the stochastic latent variable
 """
 
@@ -57,11 +57,13 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def init_weights_small_normal(module: nn.Module) -> None:
-    if isinstance(module, nn.Linear):
-        nn.init.normal_(module.weight, mean=0.0, std=0.01)
-        if module.bias is not None:
-            nn.init.zeros_(module.bias)
+@torch.no_grad()
+def init_params_paper(model: nn.Module) -> None:
+    # Paper, Sec. 5: "All parameters, both variational and generative, were initialized
+    # by random sampling from N(0, 0.01)". As in N(0, I), the second argument is the
+    # variance: std = 0.1, for weights and biases alike.
+    for param in model.parameters():
+        param.normal_(mean=0.0, std=0.1)
 
 
 # ---------------- Data ----------------------- #
@@ -107,7 +109,7 @@ def make_vae(latent_dim: int, hidden: int = HIDDEN_SIZE) -> VAE:
 
     model = VAE(encoder=encoder, decoder=decoder, latent_dim=latent_dim)
     model.build(input_sample=torch.randn(1, 1, 28, 28))
-    model.apply(init_weights_small_normal)
+    init_params_paper(model)
     return model
 
 # ---------------- Evaluation ----------------- #
@@ -137,17 +139,15 @@ def train_one_setting(
 ) -> Tuple[VAE, List[Dict[str, float]]]:
     model = make_vae(latent_dim).to(DEVICE)
 
-    # Paper, Sec. 5: "a small weight decay term corresponding to a prior p(theta) = N(0, I)"
-    # on the generative parameters theta (the decoder). The loss is a per-datapoint mean,
-    # i.e. the dataset objective divided by N, so the prior contributes -||theta||^2 / (2N):
-    # a weight decay of 1/N. The variational parameters phi (encoder) have no prior.
-    weight_decay = 1.0 / len(train_loader.dataset)
+    # Paper, Sec. 5: "a small weight decay term corresponding to a prior p(theta) = N(0, I)",
+    # and all parameters "were jointly stochastically optimized using the MAP criterion",
+    # so the prior is applied to encoder and decoder alike. The loss is a per-datapoint mean
+    # (the dataset objective divided by N), so the prior contributes -||params||^2 / (2N):
+    # a weight decay of 1/N.
     optimizer = torch.optim.Adagrad(
-        [
-            {"params": model.decoder.parameters(), "weight_decay": weight_decay},
-            {"params": [*model.encoder.parameters(), *model.sampling_layer.parameters()]},
-        ],
+        model.parameters(),
         lr=LEARNING_RATE,
+        weight_decay=1.0 / len(train_loader.dataset),
     )
 
     logs: List[Dict[str, float]] = []

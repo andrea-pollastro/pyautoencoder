@@ -15,9 +15,11 @@ The setup follows the configuration in the paper:
 * hidden size :math:`H = 500`;
 * mini-batch size :math:`M = 100`;
 * Adagrad, learning rate selected from :math:`\{0.01, 0.02, 0.1\}` (here: ``0.02``);
-* small weight decay corresponding to a prior :math:`p(\theta) = \mathcal{N}(0, I)`
-  on the generative (decoder) parameters, i.e. a weight decay of :math:`1/N` with
-  :math:`N` training points, since the loss is a per-datapoint mean;
+* all parameters initialized from :math:`\mathcal{N}(0, 0.01)` (variance
+  :math:`0.01`, i.e. standard deviation :math:`0.1`);
+* small weight decay corresponding to a prior :math:`\mathcal{N}(0, I)` on all
+  parameters, i.e. a weight decay of :math:`1/N` with :math:`N` training points,
+  since the loss is a per-datapoint mean;
 * :math:`L = 1` Monte Carlo sample for the latent variable estimator.
 
 
@@ -68,7 +70,8 @@ Each VAE consists of:
 * linear output logits interpreted by :meth:`VAE.compute_loss`
   under a Bernoulli likelihood.
 
-Weights are initialized with a small Gaussian as described in the paper.
+All parameters (weights and biases) are initialized from :math:`\mathcal{N}(0, 0.01)`
+as described in the paper, reading the second argument as the variance.
 
 .. literalinclude:: ../../../examples/mnist_vae_kingma2013.py
    :language: python
