@@ -885,6 +885,91 @@ def test_vae_decode_rejects_z_without_sample_dim_or_wrong_latent_dim(z_shape):
         vae._decode(torch.randn(z_shape))
 
 
+@pytest.mark.parametrize(
+    "x_shape, dec_out_shape, S",
+    [
+        ((4, 1, 2, 2), (2, 2), 1),  # decoder drops the channel dim: x_hat has the shape of x
+        ((4, 1, 2, 2), (2, 2), 5),  # same decoder, S = 5: samples were summed, not averaged
+        ((4, 3, 2, 2), (2, 2), 3),  # RGB with S equal to the number of channels
+        ((3, 4), (1, 4), 3),        # extra dim with B == S: samples were compared with other inputs
+        ((3, 4), (1, 4), 2),        # extra dim with B != S
+    ],
+)
+def test_vae_compute_loss_rejects_decoder_output_not_matching_x(x_shape, dec_out_shape, S):
+    encoder = nn.Sequential(nn.Flatten(), nn.Linear(math.prod(x_shape[1:]), 6))
+    decoder = nn.Sequential(
+        nn.Linear(2, math.prod(dec_out_shape)),
+        nn.Unflatten(-1, dec_out_shape),
+    )
+    vae = VAE(encoder=encoder, decoder=decoder, latent_dim=2)
+    x = torch.rand(x_shape)
+    vae.build(x)
+
+    out = vae(x, S=S)
+
+    with pytest.raises(ValueError, match=r"x_hat must have shape \[B, S, \*x\.shape\[1:\]\]"):
+        vae.compute_loss(x, out)
+
+
+@pytest.mark.parametrize(
+    "x_hat_shape, suggests_unsqueeze",
+    [
+        ((3, 5), True),      # no sample dimension
+        ((3, 0, 5), False),  # S = 0
+        ((4, 2, 5), False),  # batch differs from x
+        ((3, 2, 6), False),  # one sample differs from one input
+    ],
+)
+def test_vae_compute_loss_rejects_bad_x_hat_shape(x_hat_shape, suggests_unsqueeze):
+    vae = _make_built_vae(in_features=5, latent_dim=4)
+    x = torch.randn(3, 5)
+    out = VAEOutput(
+        x_hat=torch.randn(x_hat_shape),
+        z=torch.randn(3, 2, 4),
+        mu=torch.randn(3, 4),
+        log_var=torch.randn(3, 4),
+    )
+
+    with pytest.raises(ValueError, match=r"= \[3, S, 5\] with S >= 1") as exc_info:
+        vae.compute_loss(x, out)
+    # The unsqueeze(1) hint only appears when the sample dimension may be missing
+    assert ("unsqueeze(1)" in str(exc_info.value)) == suggests_unsqueeze
+
+
+@pytest.mark.parametrize(
+    "mu_shape, log_var_shape",
+    [
+        ((1, 4), (1, 4)),  # batch 1: the KL was broadcast over the whole batch
+        ((3, 4), (3, 3)),  # log_var differs from mu
+        ((3, 3), (3, 3)),  # D_z differs from latent_dim
+    ],
+)
+def test_vae_compute_loss_rejects_bad_posterior_shapes(mu_shape, log_var_shape):
+    vae = _make_built_vae(in_features=5, latent_dim=4)
+    x = torch.randn(3, 5)
+    out = VAEOutput(
+        x_hat=torch.randn(3, 2, 5),
+        z=torch.randn(3, 2, 4),
+        mu=torch.randn(mu_shape),
+        log_var=torch.randn(log_var_shape),
+    )
+
+    with pytest.raises(ValueError, match=r"mu and log_var must have shape \[B, D_z\] = \[3, 4\]"):
+        vae.compute_loss(x, out)
+
+
+def test_adagvae_compute_loss_rejects_bad_shapes():
+    from pyautoencoder.variational.vae import AdaGVAE
+
+    adagvae = AdaGVAE(vae=_make_built_vae(in_features=5))
+    x1, x2 = torch.randn(3, 5), torch.randn(3, 5)
+    out = adagvae((x1, x2))
+    out.output2.x_hat = out.output2.x_hat[:, 0]  # drop the sample dimension
+
+    with pytest.raises(ValueError, match=r"x_hat must have shape"):
+        adagvae.compute_loss((x1, x2), out)
+
+
 def test_vae_decode_accepts_single_sample_with_explicit_S_dim():
     vae = _make_built_vae(in_features=5, latent_dim=4)
 

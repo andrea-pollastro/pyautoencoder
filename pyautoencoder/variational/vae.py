@@ -309,8 +309,9 @@ class VAE(BaseAutoencoder):
 
         Monte Carlo estimation
         ----------------------
-        If ``x_hat`` in ``output`` contains ``S`` Monte Carlo samples,
-        the expectation :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
+        ``x_hat`` in ``output`` contains ``S`` Monte Carlo samples per input
+        (``S = 1`` included), and the expectation
+        :math:`\mathbb{E}_{q(z \mid x)}` is approximated by:
 
         .. math::
 
@@ -320,10 +321,11 @@ class VAE(BaseAutoencoder):
 
         Broadcasting
         ------------
-        - If ``x_hat`` has as many dimensions as ``x`` (shape ``[B, ...]``),
-          a sample dimension is added: ``[B, 1, ...]``.
-        - ``x`` is broadcast to match the sample dimension of ``x_hat``,
-          without copying data.
+        - ``x_hat`` must have shape ``[B, S, *x.shape[1:]]``: the dimension
+          after the batch is always the sample dimension, also when ``S = 1``,
+          and it is never inferred from the shapes.
+        - ``x`` is broadcast over the sample dimension only, without copying
+          data, so sample ``s`` of input ``i`` is always compared with ``x[i]``.
 
         Parameters
         ----------
@@ -332,8 +334,10 @@ class VAE(BaseAutoencoder):
         output : VAEOutput
             Output from the VAE forward pass. Expected fields include:
 
-            - ``x_hat`` (torch.Tensor): Reconstructed samples, shape ``[B, ...]`` or ``[B, S, ...]``.
-            - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``.
+            - ``x_hat`` (torch.Tensor): Reconstructed samples, shape ``[B, S, ...]``,
+              where ``...`` is the shape of one input, ``x.shape[1:]``.
+            - ``mu`` (torch.Tensor): Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``
+              with ``D_z = latent_dim``.
             - ``log_var`` (torch.Tensor): Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
 
         beta : float, optional
@@ -357,6 +361,14 @@ class VAE(BaseAutoencoder):
               - ``"kl_divergence"``: Mean :math:`\mathrm{KL}(q \,\|\, p)` over the batch
                 (not multiplied by ``beta``).
 
+        Raises
+        ------
+        ValueError
+            If ``x_hat`` is not of shape ``[B, S, *x.shape[1:]]`` with
+            ``S >= 1``, if ``mu`` and ``log_var`` are not both of shape
+            ``[B, latent_dim]``, or if ``likelihood`` is not a supported
+            likelihood model.
+
         Notes
         -----
         - All returned diagnostics are **batch means**.
@@ -377,16 +389,31 @@ class VAE(BaseAutoencoder):
         if isinstance(likelihood, str):
             likelihood = LikelihoodType(likelihood.lower())
 
-        # Ensure a sample dimension S exists -> [B, S, ...]
-        if x_hat.dim() == x.dim():
-            x_hat = x_hat.unsqueeze(1)  # S = 1
-        B, S = x_hat.size(0), x_hat.size(1)
+        # By contract dim 1 of x_hat is the sample dimension S, also when S = 1.
+        # It is never inferred from the shapes: any guess is ambiguous and can
+        # silently pair samples with the wrong elements of x.
+        B = x.size(0)
+        if (x_hat.dim() != x.dim() + 1
+                or x_hat.shape[:1] + x_hat.shape[2:] != x.shape
+                or x_hat.size(1) < 1):
+            expected = ", ".join([str(B), "S", *map(str, x.shape[1:])])
+            hint = (" If x_hat has no sample dimension, use x_hat.unsqueeze(1)."
+                    if x_hat.dim() == x.dim() else "")
+            raise ValueError(
+                f"x_hat must have shape [B, S, *x.shape[1:]] = [{expected}] with "
+                f"S >= 1, got {tuple(x_hat.shape)}. The decoder output for one "
+                f"latent code must have the shape of one input.{hint}"
+            )
+        if mu.shape != (B, self.latent_dim) or log_var.shape != mu.shape:
+            raise ValueError(
+                f"mu and log_var must have shape [B, D_z] = [{B}, {self.latent_dim}], "
+                f"got {tuple(mu.shape)} and {tuple(log_var.shape)}."
+            )
+        S = x_hat.size(1)
 
-        # Broadcast x to match x_hat's [B, S, ...] shape
-        x_expanded = x.unsqueeze(1)  # [B, 1, ...]
-        if x_expanded.shape != x_hat.shape:
-            # expand_as is a view (no real data copy) when only singleton dims are expanded
-            x_expanded = x_expanded.expand_as(x_hat)
+        # Broadcast x over the sample dimension only: [B, 1, ...] -> [B, S, ...].
+        # The shapes above match everywhere else, and expand_as is a view (no copy).
+        x_expanded = x.unsqueeze(1).expand_as(x_hat)
 
         # log p(x|z): elementwise -> sum over features => [B, S]
         log_px_z = log_likelihood(x_expanded, x_hat, likelihood=likelihood)
@@ -626,6 +653,13 @@ class AdaGVAE(nn.Module):
               - ``"log_likelihood_x2"``: Mean reconstruction term for ``x2``.
               - ``"kl_divergence_x1"``: Mean KL divergence for ``x1``.
               - ``"kl_divergence_x2"``: Mean KL divergence for ``x2``.
+
+        Raises
+        ------
+        ValueError
+            If either output of the pair fails the shape checks of
+            :meth:`VAE.compute_loss`, or if ``likelihood`` is not a supported
+            likelihood model.
         """
         x1, x2 = x
         loss1 = self.vae.compute_loss(x=x1, output=output.output1, beta=beta, likelihood=likelihood)

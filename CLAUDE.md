@@ -56,6 +56,7 @@ All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelO
 - Latents always carry a Monte Carlo sample dimension: `z` is `[B, S, D_z]` even when `S=1`, and `x_hat` is `[B, S, ...]`. `_decode` rejects anything else and reshapes to `[B*S, D_z]` before calling the user's decoder.
 - The explicit `sample` argument decides between sampling and the posterior mean; train/eval mode has no effect. `forward`/`_encode` default to `sample=True`, while `VAE.encode` defaults to `sample=False` and returns the posterior mean. `sample=False` requires `S=1`.
 - `compute_loss` takes the Monte Carlo average of the log-likelihood over `S`, subtracts `beta`·KL(q‖N(0,I)), and returns the negative ELBO.
+- `compute_loss` first checks that `x_hat` is `[B, S, *x.shape[1:]]` and that `mu`/`log_var` are `[B, latent_dim]`, and raises otherwise. It never infers `S` from the shapes (any guess is ambiguous), and it broadcasts `x` over `S` only.
 
 ### AdaGVAE
 
