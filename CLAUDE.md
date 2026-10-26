@@ -42,7 +42,7 @@ sphinx-build -W --keep-going -b html docs/source docs/build/html
 - `build(input_sample)`: a no-grad forward pass in eval mode that materializes lazy layers. It restores each submodule's original `training` flag. It must be called before creating the optimizer, but is not needed before `load_state_dict`.
 - `compute_loss(x, output, ...) -> LossResult`: the second argument is always named `output`.
 
-All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelOutput`. `repr=False` keeps the base class's tensor-aware `__repr__`, which prints shape and dtype instead of values. Each model has an `*EncodeOutput`, a `*DecodeOutput` and a full `*Output`.
+All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelOutput`. `repr=False` keeps the base class's tensor-aware `__repr__`, which prints shape and dtype instead of values. AE and VAE each have an `*EncodeOutput`, a `*DecodeOutput` and a full `*Output`; AdaGVAE has only `AdaGVAEOutput` (a pair of `VAEOutput`s).
 
 ### Losses (`pyautoencoder/loss/base.py`)
 
@@ -66,3 +66,4 @@ All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelO
 - `docs/source/examples/*.rst` pull code from `examples/*.py` with `literalinclude` + `:pyobject:`. Renaming or removing a function in an example breaks the docs build.
 - The API pages (`docs/source/api/*.rst`) list classes by hand with `autoclass`. New public classes must be added there, and also to the subpackage's `__init__.py` `__all__`.
 - Docstrings use NumPy style (parsed by napoleon), with math written as RST `:math:` / `.. math::`.
+- Docstring section headers that are not standard NumPy sections (e.g. "Shape convention") must be listed in `napoleon_custom_sections` in `docs/source/conf.py`. Otherwise they become real headings of the page, and the build does not warn.

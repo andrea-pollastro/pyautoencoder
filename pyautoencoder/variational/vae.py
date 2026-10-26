@@ -17,12 +17,14 @@ class VAEEncodeOutput(ModelOutput):
     Attributes
     ----------
     z : torch.Tensor
-        Latent samples of shape ``[B, S, D_z]``, produced by
-        :meth:`VAE._encode` or :meth:`VAE.encode`.
+        Latent codes of shape ``[B, S, D_z]``, produced by
+        :meth:`VAE._encode` or :meth:`VAE.encode`: ``S`` samples from
+        :math:`q(z \mid x)`, or the posterior mean (``S = 1``) with
+        ``sample=False``, which is the default of :meth:`VAE.encode`.
     mu : torch.Tensor
-        Mean of the approximate posterior ``q(z \mid x)``, shape ``[B, D_z]``.
+        Mean of the approximate posterior :math:`q(z \mid x)`, shape ``[B, D_z]``.
     log_var : torch.Tensor
-        Log-variance of ``q(z \mid x)``, shape ``[B, D_z]``.
+        Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
     """
 
     z: torch.Tensor
@@ -37,7 +39,7 @@ class VAEDecodeOutput(ModelOutput):
     ----------
     x_hat : torch.Tensor
         Reconstructions or logits of shape ``[B, S, ...]``, produced by
-        :meth:`VAE._decode` or :meth:`VAE.decode`.
+        :meth:`VAE._decode` or :meth:`VAE.decode <pyautoencoder._base.BaseAutoencoder.decode>`.
     """
 
     x_hat: torch.Tensor
@@ -52,12 +54,13 @@ class VAEOutput(ModelOutput):
         Reconstructions or logits of shape ``[B, S, ...]``, produced by
         :meth:`VAE.forward`.
     z : torch.Tensor
-        Latent samples of shape ``[B, S, D_z]``, produced by
-        :meth:`VAE.forward`.
+        Latent codes of shape ``[B, S, D_z]``, produced by
+        :meth:`VAE.forward`: ``S`` samples from :math:`q(z \mid x)`, or the
+        posterior mean (``S = 1``) with ``sample=False``.
     mu : torch.Tensor
-        Mean of ``q(z \mid x)``, shape ``[B, D_z]``.
+        Mean of :math:`q(z \mid x)`, shape ``[B, D_z]``.
     log_var : torch.Tensor
-        Log-variance of ``q(z \mid x)``, shape ``[B, D_z]``.
+        Log-variance of :math:`q(z \mid x)`, shape ``[B, D_z]``.
     """
 
     x_hat: torch.Tensor
@@ -108,9 +111,10 @@ class VAE(BaseAutoencoder):
     * ``x_hat``: ``[B, S, ...]``
     * ``mu``, ``log_var``: ``[B, D_z]`` (one posterior per input, no ``S``)
 
-    Consequently, :meth:`decode` expects ``z`` of shape ``[B, S, D_z]``. To
-    decode a batch of single codes ``[N, D_z]`` (e.g. samples from the prior
-    :math:`p(z)`), use ``z.unsqueeze(1)`` or call ``model.decoder`` directly.
+    Consequently, :meth:`decode <pyautoencoder._base.BaseAutoencoder.decode>`
+    expects ``z`` of shape ``[B, S, D_z]``. To decode a batch of single codes
+    ``[N, D_z]`` (e.g. samples from the prior :math:`p(z)`), use
+    ``z.unsqueeze(1)`` or call ``model.decoder`` directly.
     """
 
     def __init__(
@@ -132,8 +136,9 @@ class VAE(BaseAutoencoder):
 
         Notes
         -----
-        A :class:`FullyFactorizedGaussian` sampling layer is created internally
-        and not exposed as a constructor parameter.
+        A :class:`~pyautoencoder.variational.stochastic_layers.FullyFactorizedGaussian`
+        sampling layer is created internally as ``self.sampling_layer``; it is
+        not a constructor parameter.
         """
 
         super().__init__()
@@ -199,6 +204,12 @@ class VAE(BaseAutoencoder):
         VAEEncodeOutput
             Contains ``z`` of shape ``[B, S, D_z]`` (``[B, 1, D_z]`` by
             default), and ``mu`` and ``log_var`` of shape ``[B, D_z]``.
+
+        Raises
+        ------
+        ValueError
+            If ``S < 1``, if ``S != 1`` with ``sample=False``, or if the
+            encoder output is not of shape ``[B, F]``.
         """
 
         return self._encode(x, S=S, sample=sample)
@@ -238,7 +249,7 @@ class VAE(BaseAutoencoder):
         return VAEDecodeOutput(x_hat=x_hat)
 
     def forward(self, x: torch.Tensor, S: int = 1, sample: bool = True) -> VAEOutput:
-        r"""Full VAE pass: encode, sample ``S`` times, decode.
+        r"""Full VAE pass: encode, draw ``S`` latent codes (or take the posterior mean), decode.
 
         Parameters
         ----------
@@ -246,7 +257,7 @@ class VAE(BaseAutoencoder):
             Input batch of shape ``[B, ...]``.
         S : int, optional
             Number of latent samples for Monte Carlo estimates. Must be
-            ``1`` when ``sample=False``. Defaults to 1.
+            ``>= 1``, and ``1`` when ``sample=False``. Defaults to 1.
         sample : bool, optional
             Whether to sample ``z`` from :math:`q(z \mid x)` (``True``) or to
             use the posterior mean ``z = mu`` (``False``). Defaults to ``True``,
@@ -255,8 +266,15 @@ class VAE(BaseAutoencoder):
         Returns
         -------
         VAEOutput
-            Contains reconstructions ``x_hat``, latent samples ``z``, and the
-            posterior parameters ``mu`` and ``log_var``.
+            Contains reconstructions ``x_hat`` of shape ``[B, S, ...]``,
+            latent codes ``z`` of shape ``[B, S, D_z]``, and the posterior
+            parameters ``mu`` and ``log_var`` of shape ``[B, D_z]``.
+
+        Raises
+        ------
+        ValueError
+            If ``S < 1``, if ``S != 1`` with ``sample=False``, or if the
+            encoder output is not of shape ``[B, F]``.
 
         Notes
         -----
@@ -286,8 +304,8 @@ class VAE(BaseAutoencoder):
                 \beta \, \mathrm{KL}(q(z \mid x) \,\|\, p(z)).
 
         The reconstruction term :math:`\log p(x \mid z)` is computed using
-        :func:`loss.base.log_likelihood`, which supports both Gaussian and
-        Bernoulli likelihoods.
+        :func:`~pyautoencoder.loss.log_likelihood`, which supports both
+        Gaussian and Bernoulli likelihoods.
 
         Monte Carlo estimation
         ----------------------
@@ -302,8 +320,10 @@ class VAE(BaseAutoencoder):
 
         Broadcasting
         ------------
-        - If ``x_hat`` has shape ``[B, ...]``, it is expanded to ``[B, 1, ...]``.
-        - ``x`` is broadcast to match the sample dimension of ``x_hat``.
+        - If ``x_hat`` has as many dimensions as ``x`` (shape ``[B, ...]``),
+          a sample dimension is added: ``[B, 1, ...]``.
+        - ``x`` is broadcast to match the sample dimension of ``x_hat``,
+          without copying data.
 
         Parameters
         ----------
@@ -331,18 +351,24 @@ class VAE(BaseAutoencoder):
             * **objective** – Negative mean ELBO (scalar).
             * **diagnostics** – Dictionary of detached scalar tensors with:
 
-              - ``"elbo"``: Mean ELBO over the batch.
+              - ``"elbo"``: Batch mean of :math:`\mathcal{L}(x; \beta)`
+                (the ELBO when ``beta = 1``).
               - ``"log_likelihood"``: Mean reconstruction term :math:`\mathbb{E}_{q}[\log p(x \mid z)]`.
-              - ``"kl_divergence"``: Mean :math:`\mathrm{KL}(q \,\|\, p)` over the batch.
+              - ``"kl_divergence"``: Mean :math:`\mathrm{KL}(q \,\|\, p)` over the batch
+                (not multiplied by ``beta``).
 
         Notes
         -----
         - All returned diagnostics are **batch means**.
-        - Gradients flow through the decoder; neither input is detached.
+        - ``objective`` is not detached: gradients flow through ``x_hat``,
+          ``mu`` and ``log_var`` to both the decoder and the encoder.
         - ``"elbo"`` is a Monte Carlo estimate of the ELBO only if ``output``
           was computed with ``sample=True`` (the default of :meth:`forward`,
           also in eval mode). With ``sample=False`` the reconstruction term is
           evaluated at ``z = mu``, which is not an ELBO estimate.
+        - With the Gaussian likelihood, ``"elbo"`` and ``"log_likelihood"``
+          omit the normalization constant of :math:`p(x \mid z)` (see
+          :func:`~pyautoencoder.loss.log_likelihood`).
         """
         x_hat = output.x_hat
         mu = output.mu
@@ -392,9 +418,11 @@ class AdaGVAEOutput(ModelOutput):
     Attributes
     ----------
     output1 : VAEOutput
-        VAE output for the first input of the pair, with adapted posterior.
+        VAE output for the first input of the pair: built from the adapted
+        posterior in training mode, plain :meth:`VAE.forward` output in eval
+        mode.
     output2 : VAEOutput
-        VAE output for the second input of the pair, with adapted posterior.
+        VAE output for the second input of the pair, as for ``output1``.
     """
 
     output1: VAEOutput
@@ -432,8 +460,8 @@ class AdaGVAE(nn.Module):
         Parameters
         ----------
         input_sample : torch.Tensor
-            A representative input batch passed to :meth:`VAE.build`.
-            Only the shape matters; values are not used.
+            A representative batch of single inputs (not a pair), passed to
+            :meth:`VAE.build <pyautoencoder._base.BaseAutoencoder.build>`. Only its shape matters.
         """
         self.vae.build(input_sample)
 
@@ -444,10 +472,14 @@ class AdaGVAE(nn.Module):
 
         1. Encodes both inputs independently to obtain posterior parameters ``(mu1, log_var1)`` and ``(mu2, log_var2)``.
         2. Computes element-wise KL divergence between the two posteriors: ``KL(q1||q2) → [B, D_z]``.
-        3. Computes a per-sample threshold ``tau`` based on KL divergences.
+        3. Computes a per-sample threshold ``tau = (max_d KL_d + min_d KL_d) / 2``.
         4. For each dimension, selects aligned (shared) or independent posteriors:
-           - If ``KL(q1_d||q2_d) < tau``: uses average distribution ``q_tilde``.
-           - If ``KL(q1_d||q2_d) ≥ tau``: uses original independent distribution.
+
+           - If ``KL(q1_d||q2_d) < tau``: uses the average posterior, whose
+             mean and variance are the averages of the two means and of the
+             two variances.
+           - If ``KL(q1_d||q2_d) ≥ tau``: keeps the original posterior.
+
         5. Samples from the resulting (mixed) posteriors.
 
         Grouping and sampling are always applied, regardless of train/eval
@@ -460,7 +492,7 @@ class AdaGVAE(nn.Module):
         x2 : torch.Tensor
             Second input batch of shape ``[B, ...]``.
         S : int, optional
-            Number of latent samples per input. Defaults to 1.
+            Number of latent samples per input. Must be ``>= 1``. Defaults to 1.
 
         Returns
         -------
@@ -508,10 +540,14 @@ class AdaGVAE(nn.Module):
         )
 
     def forward(self, x: tuple[torch.Tensor, torch.Tensor], S: int = 1) -> AdaGVAEOutput:
-        """AdaGVAE forward pass on a pair of images.
+        r"""AdaGVAE forward pass on a pair of inputs.
 
-        * ``train()`` – adaptive grouping of the two posteriors (see
-          :meth:`_encode_pair`), then sampling and decoding.
+        * ``train()`` – adaptive grouping of the two posteriors, then sampling
+          and decoding. Dimensions whose KL divergence
+          :math:`\mathrm{KL}(q_1 \,\|\, q_2)` is below the per-sample threshold
+          :math:`\tau = \tfrac{1}{2}(\max_d \mathrm{KL}_d + \min_d \mathrm{KL}_d)`
+          share the average posterior (mean of the two means and of the two
+          variances); the other dimensions keep their own posterior.
         * ``eval()`` – no grouping: each input goes independently through
           :meth:`VAE.forward`, which samples ``z`` from its own posterior.
 
@@ -549,7 +585,11 @@ class AdaGVAE(nn.Module):
                      output: AdaGVAEOutput,
                      beta: float = 1,
                      likelihood: str | LikelihoodType = LikelihoodType.GAUSSIAN) -> LossResult:
-        r"""Compute the combined ELBO for a pair of inputs with adapted posteriors.
+        r"""Compute the combined ELBO for a pair of inputs.
+
+        In training mode the two terms use the adapted posteriors
+        :math:`q(\hat{z} \mid x_i)` produced by :meth:`forward`; in eval mode
+        they use the plain VAE posteriors.
 
         .. math::
 
@@ -580,7 +620,8 @@ class AdaGVAE(nn.Module):
             * **objective** – Sum of negative ELBOs for both inputs (scalar).
             * **diagnostics** – Dictionary of detached scalar tensors with:
 
-              - ``"elbo"``: Sum of mean ELBOs for both inputs.
+              - ``"elbo"``: Sum of the two ``"elbo"`` diagnostics of
+                :meth:`VAE.compute_loss` (weighted by ``beta``).
               - ``"log_likelihood_x1"``: Mean reconstruction term for ``x1``.
               - ``"log_likelihood_x2"``: Mean reconstruction term for ``x2``.
               - ``"kl_divergence_x1"``: Mean KL divergence for ``x1``.

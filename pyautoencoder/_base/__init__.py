@@ -6,8 +6,9 @@ autoencoder implementations in this package.
 
 Warning
 -------
-This is an internal API. Most users should work with :class:`vanilla.AE` or
-:class:`variational.VAE` instead of using these base classes directly.
+This is an internal API. Most users should work with
+:class:`~pyautoencoder.vanilla.AE` or :class:`~pyautoencoder.variational.VAE`
+instead of using these base classes directly.
 """
 
 from .base import (

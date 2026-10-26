@@ -15,8 +15,9 @@ class FullyFactorizedGaussian(nn.Module):
     (``sample=True``, the default) or the posterior mean (``sample=False``).
     The choice is explicit and does not depend on train/eval mode.
 
-    The build step infers ``F`` and lazily constructs the linear layers
-    ``mu`` and ``log_var``.
+    The linear layers ``mu`` and ``log_var`` are :class:`torch.nn.LazyLinear`:
+    their input size ``F`` is inferred on the first forward pass, for example
+    the one run by :meth:`~pyautoencoder._base.BaseAutoencoder.build`.
     """
 
     def __init__(self, latent_dim: int):
@@ -127,7 +128,7 @@ class FullyFactorizedGaussian(nn.Module):
         This method always samples. It is differentiable with respect to
         ``mu`` and ``log_var``, so it can be used on posterior parameters
         computed elsewhere (for example the adapted posteriors of
-        :class:`AdaGVAE`).
+        :class:`~pyautoencoder.variational.AdaGVAE`).
 
         Parameters
         ----------

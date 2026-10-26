@@ -27,6 +27,16 @@ extensions = [
 
 exclude_patterns = []
 
+# Custom section headers used in docstrings. Napoleon renders them as rubrics,
+# like "Notes"; any other underlined header would become a real page section.
+napoleon_custom_sections = [
+    "Training API (gradients enabled)",
+    "Inference API (no gradients)",
+    "Build step",
+    "Shape convention",
+    "Monte Carlo estimation",
+    "Broadcasting",
+]
 
 
 # -- Options for HTML output -------------------------------------------------

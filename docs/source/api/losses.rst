@@ -11,9 +11,5 @@ Data Structures & Types
 -----------------------
 
 .. autoclass:: pyautoencoder.loss.LossResult
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :no-index:
 
 .. autoclass:: pyautoencoder.loss.LikelihoodType

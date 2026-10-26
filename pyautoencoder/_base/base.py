@@ -11,7 +11,7 @@ class ModelOutput:
     """Base class for autoencoder outputs with a concise, tensor-aware ``repr``.
 
     Subclasses are dataclasses that group together tensors and auxiliary values
-    produced by a model (for example latent codes, reconstructions, losses, etc.).
+    produced by a model (for example latent codes and reconstructions).
     The custom :meth:`__repr__` implementation prints tensor fields using only
     their shape and dtype instead of full values, which keeps logs readable even
     for large tensors.
@@ -63,6 +63,10 @@ class BaseAutoencoder(nn.Module, ABC):
       ``z`` and ``x_hat``, plus any other quantities needed for loss
       computation.
 
+    * ``compute_loss(x, output, *args, **kwargs) -> LossResult``
+      Training objective computed from the inputs ``x`` and the ``output``
+      of :meth:`forward`.
+
     Inference API (no gradients)
     ----------------------------
     For convenience, the class also exposes high-level inference helpers that
@@ -72,7 +76,8 @@ class BaseAutoencoder(nn.Module, ABC):
     * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
 
     Subclasses may override them to set inference-friendly defaults (for
-    example :meth:`VAE.encode` returns the posterior mean by default).
+    example :meth:`~pyautoencoder.variational.VAE.encode` returns the
+    posterior mean by default).
 
     Build step
     ----------

@@ -12,7 +12,7 @@ class AEEncodeOutput(ModelOutput):
     ----------
     z : torch.Tensor
         Latent code of shape ``[B, ...]`` produced by :meth:`AE._encode`
-        or :meth:`AE.encode`.
+        or :meth:`AE.encode <pyautoencoder._base.BaseAutoencoder.encode>`.
     """
 
     z: torch.Tensor
@@ -25,7 +25,7 @@ class AEDecodeOutput(ModelOutput):
     ----------
     x_hat : torch.Tensor
         Reconstruction (or logits) of shape ``[B, ...]`` produced by
-        :meth:`AE._decode` or :meth:`AE.decode`.
+        :meth:`AE._decode` or :meth:`AE.decode <pyautoencoder._base.BaseAutoencoder.decode>`.
     """
 
     x_hat: torch.Tensor
@@ -49,7 +49,7 @@ class AEOutput(ModelOutput):
 class AE(BaseAutoencoder):
     """Vanilla Autoencoder composed of a user-defined encoder and decoder.
 
-    The model follows the :class:`BaseAutoencoder` interface and implements:
+    The model follows the :class:`~pyautoencoder._base.BaseAutoencoder` interface and implements:
 
     * ``_encode(x)`` – maps inputs ``x`` to latent codes ``z``.
     * ``_decode(z)`` – maps latent codes ``z`` to reconstructions ``x_hat``.
@@ -160,6 +160,12 @@ class AE(BaseAutoencoder):
             * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"log_likelihood"``: Negative of the objective (batch-mean log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If ``output.x_hat`` and ``x`` do not have the same shape, or if
+            ``likelihood`` is not a supported likelihood model.
 
         Notes
         -----

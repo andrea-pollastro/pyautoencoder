@@ -58,11 +58,14 @@ the image from this latent vector.
 
 Notes:
 
-* The final decoder layer is **linear** and produces logits.
-* The model is explicitly built through :meth:`AE.build`, which infers
-  required shapes from a representative sample.
+* The last layer with parameters is **linear** and produces logits;
+  ``nn.Unflatten`` then reshapes them to the input shape ``[B, 1, 28, 28]``.
+* The model is built through :meth:`AE.build`, which runs a forward pass on a
+  representative sample. This architecture has no lazy layers, so the call
+  only checks that encoder and decoder fit together.
 * Reconstruction loss is computed via the :meth:`AE.compute_loss` method,
-  which uses a Bernoulli likelihood (interpreting the decoder output as logits).
+  called with ``likelihood='bernoulli'``, so the decoder output is
+  interpreted as logits.
 
 
 Training Loop
@@ -87,7 +90,8 @@ For each batch:
   - ``diagnostics['log_likelihood']`` – batch-mean log-likelihood (negative of objective).
 
 * The loss is backpropagated through the entire model.
-* These quantities are accumulated over the epoch and reported in the log.
+* The log-likelihood is accumulated over the epoch (weighted by batch size),
+  and its per-sample average is printed at the end of each epoch.
 
 
 Visualizing Reconstructions

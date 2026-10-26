@@ -18,8 +18,8 @@ Or install from source:
 
 .. code-block:: bash
 
-    git clone https://github.com/andrea-pollastro/pyautoencoders.git
-    cd pyautoencoders
+    git clone https://github.com/andrea-pollastro/pyautoencoder.git
+    cd pyautoencoder
     pip install -e .
 
 Quick Start
@@ -48,6 +48,7 @@ Train a simple autoencoder on MNIST:
         nn.Linear(64, 256),
         nn.ReLU(),
         nn.Linear(256, 784),
+        nn.Unflatten(-1, (1, 28, 28)),  # x_hat must have the same shape as x
     )
 
     # Create and build the model
@@ -57,7 +58,7 @@ Train a simple autoencoder on MNIST:
     # Training loop
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    x_batch = torch.randn(32, 1, 28, 28)
+    x_batch = torch.rand(32, 1, 28, 28)  # stand-in for an MNIST batch, values in [0, 1]
     output = model(x_batch)
     loss_results = model.compute_loss(x_batch, output, likelihood='bernoulli')
     optimizer.zero_grad()
@@ -91,17 +92,18 @@ Train a VAE with the reparameterization trick:
         nn.Linear(64, 256),
         nn.ReLU(),
         nn.Linear(256, 784),
+        nn.Unflatten(-1, (1, 28, 28)),  # x_hat must have the same shape as x
     )
 
-    # Create and build the model
+    # Create and build the model (the encoder must output flat features [B, F])
     model = VAE(encoder=encoder, decoder=decoder, latent_dim=64)
     model.build(torch.randn(1, 1, 28, 28))
 
     # Training loop
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    x_batch = torch.randn(32, 1, 28, 28)
-    output = model(x_batch, S=1)  # S=1: single Monte Carlo sample
+    x_batch = torch.rand(32, 1, 28, 28)  # stand-in for an MNIST batch, values in [0, 1]
+    output = model(x_batch, S=1)  # S=1: single Monte Carlo sample, x_hat is [32, 1, 1, 28, 28]
     loss_results = model.compute_loss(x_batch, output, beta=1, likelihood='bernoulli')
     optimizer.zero_grad()
     loss_results.objective.backward()
@@ -117,7 +119,7 @@ All forward passes return structured output dataclasses that are easy to inspect
 
 .. code-block:: python
 
-    output = model(x)
+    output = model(x)  # the AE above
     print(output)
     # AEOutput(x_hat=Tensor(shape=(32, 1, 28, 28), dtype=torch.float32),
     #          z=Tensor(shape=(32, 64), dtype=torch.float32))
@@ -125,11 +127,13 @@ All forward passes return structured output dataclasses that are easy to inspect
 Loss Result
 ~~~~~~~~~~~~~~~
 
-Loss functions return structured results with optimization targets and diagnostics:
+Each model's ``compute_loss`` returns a :class:`~pyautoencoder.loss.LossResult`
+with the objective to optimize and a dictionary of diagnostics:
 
 .. code-block:: python
 
-    loss_results = loss_fn(x, model_output)
+    loss_results = model.compute_loss(x, output)
     loss_results.objective.backward()      # Optimize this
-    print(loss_results.diagnostics)        # Log these for additional diagnostics 
+    # Diagnostics are detached 0-dim tensors: call .item() when logging
+    print({name: val.item() for name, val in loss_results.diagnostics.items()})
 

@@ -11,8 +11,8 @@ class LikelihoodType(Enum):
     GAUSSIAN : str
         Gaussian likelihood with fixed unit variance :math:`\sigma^2 = 1`.
     BERNOULLI : str
-        Bernoulli likelihood for discrete data, with ``x_hat`` interpreted
-        as logits.
+        Bernoulli likelihood for binary data (or values in :math:`[0, 1]`),
+        with ``x_hat`` interpreted as logits.
     """
 
     GAUSSIAN = 'gaussian'
@@ -23,7 +23,8 @@ class LossResult:
     r"""Container for loss computation results with objective and diagnostics.
 
     This dataclass holds the output of model loss computation methods
-    (:meth:`AE.compute_loss`, :meth:`VAE.compute_loss`, etc.), separating
+    (:meth:`~pyautoencoder.vanilla.AE.compute_loss`,
+    :meth:`~pyautoencoder.variational.VAE.compute_loss`, etc.), separating
     the optimizable objective from optional diagnostic metrics.
 
     Attributes
@@ -61,7 +62,7 @@ def log_likelihood(x: torch.Tensor,
       The output has the same shape as ``x``. Summing over feature dimensions
       gives per-sample log-likelihoods.
 
-    - Bernoulli (discrete data)
+    - Bernoulli (binary data, or values in :math:`[0, 1]`)
       Here ``x_hat`` is interpreted as logits. Each element follows:
 
       .. math::
@@ -82,9 +83,9 @@ def log_likelihood(x: torch.Tensor,
         Reconstructed tensor of shape ``[B, ...]``. For the Bernoulli case,
         values are logits.
     likelihood : str | LikelihoodType, optional
-        Likelihood model to use. May be a string (``"gaussian"``,
-        ``"bernoulli"``) or a :class:`LikelihoodType` enum value.
-        Defaults to Gaussian.
+        Likelihood model to use. May be a case-insensitive string
+        (``"gaussian"``, ``"bernoulli"``) or a :class:`LikelihoodType` enum
+        value. Defaults to Gaussian.
 
     Returns
     -------
@@ -94,8 +95,9 @@ def log_likelihood(x: torch.Tensor,
     Raises
     ------
     ValueError
-        If ``x`` and ``x_hat`` do not have the same shape. Broadcasting is
-        not allowed, because it would silently produce a wrong loss.
+        If ``x`` and ``x_hat`` do not have the same shape (broadcasting is
+        not allowed, because it would silently produce a wrong loss), or if
+        ``likelihood`` is not a supported likelihood model.
 
     Notes
     -----
@@ -164,7 +166,8 @@ def kl_divergence_diag_gaussian(
         Log-variance of the second distribution, shape ``[B, D_z]``. Defaults
         to ``None``, which is treated as **0** (standard normal log-variance).
     reduce_sum : bool, optional
-        Sum over the dimensions. Defaults to ``True``.
+        Whether to sum over the last (latent) dimension ``D_z``.
+        Defaults to ``True``.
 
     Returns
     -------

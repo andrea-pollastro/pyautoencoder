@@ -55,7 +55,7 @@ The :class:`~pyautoencoder.vanilla.AE` is a deterministic encoder-decoder model:
 
     class AEOutput:
         x_hat: torch.Tensor       # Reconstruction [B, ...]
-        z: torch.Tensor           # Latent code [B, D_z]
+        z: torch.Tensor           # Latent code [B, ...] (the encoder output)
 
 
 Variational Autoencoder (VAE)
@@ -66,9 +66,13 @@ The :class:`~pyautoencoder.variational.VAE` implements the VAE framework
 
 **Architecture**
 
-- **Encoder** – Maps input :math:`x` to latent distribution :math:`q(z|x)`
-- **Sampling layer** – Produces mean :math:`\mu`, log-variance :math:`\log\sigma^2`
-- **Decoder** – Maps sampled :math:`z` to reconstruction distribution :math:`p(x|z)`
+- **Encoder** – Maps input :math:`x` to a flat feature vector of shape
+  :math:`[B, F]` (end it with ``nn.Flatten()`` if needed)
+- **Sampling layer** – Maps the features to the mean :math:`\mu` and
+  log-variance :math:`\log\sigma^2` of :math:`q(z|x)`, then draws :math:`z`
+  with the reparameterization trick
+- **Decoder** – Maps :math:`z` to the parameters of :math:`p(x|z)` (the
+  reconstruction, or logits for the Bernoulli likelihood)
 
 **Training**
 
@@ -127,9 +131,10 @@ Generate samples from the prior :math:`p(z) = \mathcal{N}(0, I)`:
 
 .. code-block:: python
 
+    model.eval()
     with torch.no_grad():
-        z_prior = torch.randn(n_samples, latent_dim)
-        x_samples = model.decoder(z_prior)
+        z_prior = torch.randn(n_samples, latent_dim)  # [N, D_z], no sample dimension
+        x_samples = model.decoder(z_prior)            # logits for the Bernoulli likelihood: apply torch.sigmoid
 
 
 Adaptive Group Variational Autoencoder (AdaGVAE)
@@ -192,23 +197,24 @@ After training, AdaGVAE reuses the underlying VAE for single-image inference:
 .. code-block:: python
 
     class AdaGVAEOutput:
-        output1: VAEOutput    # Adapted output for x1
-        output2: VAEOutput    # Adapted output for x2
+        output1: VAEOutput    # Output for x1
+        output2: VAEOutput    # Output for x2
 
 Each :class:`~pyautoencoder.variational.VAEOutput` contains ``x_hat``, ``z``,
-``mu``, and ``log_var`` for the corresponding adapted posterior.
+``mu``, and ``log_var`` for the corresponding posterior: the adapted one in
+train mode, the plain VAE posterior in eval mode.
 
 
 Loss Functions
 --------------
 
-The loss computation is integrated into each model via the :meth:`compute_loss` method.
+The loss computation is integrated into each model via its ``compute_loss`` method.
 This approach keeps loss logic close to the model implementation and ensures consistency.
 
 Reconstruction Loss (AE)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-For standard autoencoders, use :meth:`AE.compute_loss` to compute reconstruction loss:
+For standard autoencoders, use :meth:`AE.compute_loss <pyautoencoder.vanilla.AE.compute_loss>` to compute reconstruction loss:
 
 .. code-block:: python
 
@@ -216,15 +222,16 @@ For standard autoencoders, use :meth:`AE.compute_loss` to compute reconstruction
     loss_result = model.compute_loss(x, output, likelihood='gaussian')
     loss_result.objective.backward()
 
-Supported likelihoods:
+Supported likelihoods (per element; the loss sums over features and averages
+over the batch):
 
-- **Gaussian** – Continuous data
+- **Gaussian** – Continuous data (unit variance, no normalization constant)
   
   .. math::
   
       \text{NLL} = \frac{1}{2}(x-\hat{x})^2
 
-- **Bernoulli** – Discrete/binary data (logits)
+- **Bernoulli** – Binary data or values in :math:`[0, 1]` (``x_hat`` are logits)
 
   .. math::
   
@@ -234,7 +241,7 @@ Supported likelihoods:
 ELBO Loss (VAE)
 ~~~~~~~~~~~~~~~
 
-For variational autoencoders, use :meth:`VAE.compute_loss` to compute the negative ELBO:
+For variational autoencoders, use :meth:`VAE.compute_loss <pyautoencoder.variational.VAE.compute_loss>` to compute the negative ELBO:
 
 .. code-block:: python
 
@@ -257,10 +264,13 @@ The :math:`\beta` hyperparameter controls the KL weight:
 - :math:`\beta > 1.0` – Stronger regularization (more disentangled latents)
 - :math:`\beta < 1.0` – Weaker regularization (better reconstruction)
 
+The ``elbo`` diagnostic is :math:`\mathcal{L}(x; \beta)`, so it equals the ELBO
+only for :math:`\beta = 1`; ``kl_divergence`` is not multiplied by :math:`\beta`.
+
 Paired ELBO Loss (AdaGVAE)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For AdaGVAE, use :meth:`AdaGVAE.compute_loss` to compute the combined objective
+For AdaGVAE, use :meth:`AdaGVAE.compute_loss <pyautoencoder.variational.AdaGVAE.compute_loss>` to compute the combined objective
 over the pair:
 
 .. code-block:: python
@@ -286,7 +296,9 @@ The diagnostics dictionary exposes per-input reconstruction and KL terms
 
 **Loss Result Structure**
 
-:meth:`AE.compute_loss`, :meth:`VAE.compute_loss`, and :meth:`AdaGVAE.compute_loss`
+:meth:`AE.compute_loss <pyautoencoder.vanilla.AE.compute_loss>`,
+:meth:`VAE.compute_loss <pyautoencoder.variational.VAE.compute_loss>`, and
+:meth:`AdaGVAE.compute_loss <pyautoencoder.variational.AdaGVAE.compute_loss>`
 all return a :class:`~pyautoencoder.loss.LossResult` with:
 
 - **objective** – scalar loss to optimize (backward-differentiable)
@@ -320,7 +332,7 @@ This keeps the library flexible and composable with existing PyTorch code.
 
 **Explicit Initialization**
 
-The :meth:`build` method initializes size-dependent parameters:
+The :meth:`build <pyautoencoder._base.BaseAutoencoder.build>` method initializes size-dependent parameters:
 
 .. code-block:: python
 

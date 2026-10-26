@@ -64,7 +64,9 @@ Model Definition
 
 Each VAE consists of:
 
-* a single-hidden-layer encoder mapping :math:`x \mapsto (\mu, \log \sigma^2)`,
+* a single-hidden-layer encoder mapping :math:`x \mapsto (\mu, \log \sigma^2)`:
+  the user-defined encoder computes the Tanh hidden layer, and the VAE's
+  sampling layer maps it to :math:`\mu` and :math:`\log \sigma^2`,
 * a single-hidden-layer decoder mapping :math:`z \mapsto \hat{x}`,
 * Tanh nonlinearities,
 * linear output logits interpreted by :meth:`VAE.compute_loss`
@@ -85,8 +87,8 @@ dimension-dependent components from a representative input sample.
 ELBO Evaluation
 ---------------
 
-We evaluate the ELBO over a dataloader by summing the batch-wise ELBO
-diagnostics returned by :meth:`VAE.compute_loss`.
+We evaluate the ELBO over a dataloader by averaging the batch-wise ``elbo``
+diagnostics returned by :meth:`VAE.compute_loss`, weighted by batch size.
 
 The forward pass samples :math:`z \sim q(z \mid x)` also in eval mode, so the
 returned ``elbo`` is a Monte Carlo estimate of the ELBO on the evaluated data.
@@ -115,14 +117,14 @@ train and test sets are logged.
 
 Each training step:
 
-* Draws :math:`S` Monte Carlo samples from :math:`q(z \mid x)`,
+* Draws :data:`MC_SAMPLES` (:math:`L = 1`) Monte Carlo samples from :math:`q(z \mid x)`,
 * Computes the negative ELBO via :meth:`VAE.compute_loss` with ``likelihood='bernoulli'``,
 * Backpropagates gradients through encoder and decoder,
 * Records evaluation metrics periodically.
 
 The ELBO diagnostics contain:
 
-* ``elbo`` – Evidence Lower Bound value,
+* ``elbo`` – batch-mean Evidence Lower Bound (``beta=1`` here),
 * ``log_likelihood`` – batch-mean reconstruction term,
 * ``kl_divergence`` – batch-mean KL divergence.
 
