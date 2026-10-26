@@ -1049,3 +1049,14 @@ def test_compute_loss_accepts_output_keyword_like_base_class():
 
     adagvae = AdaGVAE(vae=vae)
     assert adagvae.compute_loss((x1, x2), output=adagvae((x1, x2))).objective.dim() == 0
+
+
+def test_sampling_layer_class_is_importable_only_from_stochastic_layers():
+    # The only import path is pyautoencoder.variational.stochastic_layers
+    # (imported at the top of this file); the package and vae.py don't expose it.
+    with pytest.raises(ImportError):
+        from pyautoencoder.variational import FullyFactorizedGaussian as _  # noqa: F401
+    with pytest.raises(ImportError):
+        from pyautoencoder.variational.vae import FullyFactorizedGaussian as _  # noqa: F401, F811
+
+    assert isinstance(_make_built_vae().sampling_layer, FullyFactorizedGaussian)

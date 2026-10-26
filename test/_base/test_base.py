@@ -175,7 +175,7 @@ def test_training_paths_use_grad_encode_decode_forward():
     assert out_d.x_hat.requires_grad is True
 
 
-def test_inference_encode_decode_use_inference_mode_no_grad():
+def test_inference_encode_decode_run_without_grad():
     model = ToyAutoencoder()
     x = torch.randn(5, model.in_dim)
 
@@ -193,12 +193,38 @@ def test_inference_encode_decode_use_inference_mode_no_grad():
     assert model.encode_grad_enabled is False
     assert model.decode_grad_enabled is False
 
-    # Outputs from inference_mode must not require grad
+    # Outputs must not require grad, and must be regular (not inference) tensors
     assert encode_out.z.requires_grad is False
     assert decode_out.x_hat.requires_grad is False
+    assert not encode_out.z.is_inference()
+    assert not decode_out.x_hat.is_inference()
 
     # Global grad state must be restored
     assert torch.is_grad_enabled() is True
+
+
+def test_encode_output_can_feed_a_model_trained_with_gradients():
+    # Frozen encoder as a feature extractor: its outputs must be usable in autograd
+    model = ToyAutoencoder()
+    x = torch.randn(5, model.in_dim)
+    classifier = nn.Linear(model.latent_dim, 3)
+
+    features = model.encode(x).z
+    loss = nn.functional.cross_entropy(classifier(features), torch.tensor([0, 1, 2, 0, 1]))
+    loss.backward()
+
+    assert classifier.weight.grad is not None
+    assert all(p.grad is None for p in model.parameters())
+
+
+def test_encode_decode_keep_train_eval_mode():
+    model = ToyAutoencoder()
+    x = torch.randn(5, model.in_dim)
+
+    for training in (True, False):
+        model.train(training)
+        model.decode(model.encode(x).z)
+        assert all(m.training is training for m in model.modules())
 
 
 def test_load_state_dict_into_unbuilt_lazy_model():

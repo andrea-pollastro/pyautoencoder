@@ -65,7 +65,8 @@ Train a simple autoencoder on MNIST:
     loss_results.objective.backward()
     optimizer.step()
 
-    # encode/decode run under inference_mode automatically
+    # Inference: encode/decode track no gradients but keep the train/eval mode
+    model.eval()
     z = model.encode(x_batch).z       # AEEncodeOutput → latent tensor
     x_hat = model.decode(z).x_hat     # AEDecodeOutput → reconstruction tensor
 

@@ -70,10 +70,15 @@ class BaseAutoencoder(nn.Module, ABC):
     Inference API (no gradients)
     ----------------------------
     For convenience, the class also exposes high-level inference helpers that
-    are executed under :func:`torch.inference_mode`:
+    are executed under :func:`torch.no_grad`:
 
     * :meth:`encode` – calls :meth:`_encode` without tracking gradients.
     * :meth:`decode` – calls :meth:`_decode` without tracking gradients.
+
+    Their outputs are regular tensors, so they can feed computations that do
+    track gradients (for example features from a frozen encoder). They do not
+    change the train/eval mode: call ``model.eval()`` first if the model has
+    layers such as dropout or batch normalization.
 
     Subclasses may override them to set inference-friendly defaults (for
     example :meth:`~pyautoencoder.variational.VAE.encode` returns the
@@ -164,13 +169,17 @@ class BaseAutoencoder(nn.Module, ABC):
         pass
 
     # --- inference-only convenience wrappers (no grad) ---
-    @torch.inference_mode()
+    # no_grad rather than inference_mode: inference tensors cannot be used later
+    # in autograd, e.g. as features of a frozen encoder for a downstream model.
+    @torch.no_grad()
     def encode(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Encode inputs without tracking gradients.
 
         This is a thin wrapper around :meth:`_encode` executed under
-        :func:`torch.inference_mode`, making it suitable for evaluation-time
-        encoding.
+        :func:`torch.no_grad`, making it suitable for evaluation-time
+        encoding. It does not change the train/eval mode: call
+        ``model.eval()`` first if the model has layers such as dropout or
+        batch normalization.
 
         Parameters
         ----------
@@ -190,13 +199,15 @@ class BaseAutoencoder(nn.Module, ABC):
 
         return self._encode(x, *args, **kwargs)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def decode(self, z: torch.Tensor, *args: Any, **kwargs: Any) -> ModelOutput:
         """Decode latent codes without tracking gradients.
 
         This is a thin wrapper around :meth:`_decode` executed under
-        :func:`torch.inference_mode`, making it suitable for evaluation-time
-        decoding.
+        :func:`torch.no_grad`, making it suitable for evaluation-time
+        decoding. It does not change the train/eval mode: call
+        ``model.eval()`` first if the model has layers such as dropout or
+        batch normalization.
 
         Parameters
         ----------

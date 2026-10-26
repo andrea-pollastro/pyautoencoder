@@ -40,7 +40,7 @@ sphinx-build -n -E -b html docs/source docs/build/html
 `BaseAutoencoder(nn.Module, ABC)` splits each model into:
 
 - `_encode`, `_decode`, `forward`: gradient-enabled; subclasses implement them and use them for training.
-- `encode`, `decode`: public inference wrappers that run under `torch.inference_mode()`. Subclasses may override them to change defaults (see VAE).
+- `encode`, `decode`: public inference wrappers that run under `torch.no_grad()`. Not `inference_mode`: its outputs could not be used later in autograd (e.g. frozen-encoder features). They don't change the train/eval mode. Subclasses may override them to change defaults (see VAE).
 - `build(input_sample)`: a no-grad forward pass in eval mode that materializes lazy layers. It restores each submodule's original `training` flag. It must be called before creating the optimizer, but is not needed before `load_state_dict`.
 - `compute_loss(x, output, ...) -> LossResult`: the second argument is always named `output`.
 
@@ -55,6 +55,7 @@ All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelO
 ### VAE (`pyautoencoder/variational/`)
 
 - The encoder must output flat features `[B, F]`. `FullyFactorizedGaussian` maps them to `mu`/`log_var` with `nn.LazyLinear`, which is why `build()` is required.
+- `FullyFactorizedGaussian` must be importable only as `from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian` (at runtime it is `vae.sampling_layer`). It is deliberately not in `pyautoencoder.variational` or its `__all__`, and `vae.py` imports the module, not the class, so it is not a name of `vae` either.
 - Latents always carry a Monte Carlo sample dimension: `z` is `[B, S, D_z]` even when `S=1`, and `x_hat` is `[B, S, ...]`. `_decode` rejects anything else and reshapes to `[B*S, D_z]` before calling the user's decoder.
 - The explicit `sample` argument decides between sampling and the posterior mean; train/eval mode has no effect. `forward`/`_encode` default to `sample=True`, while `VAE.encode` defaults to `sample=False` and returns the posterior mean. `sample=False` requires `S=1`.
 - `compute_loss` first checks that `x_hat` is `[B, S, *x.shape[1:]]` and that `mu`/`log_var` are `[B, latent_dim]`, and raises otherwise. It never infers `S` from the shapes (any guess is ambiguous), and it broadcasts `x` over `S` only. It then takes the Monte Carlo average of the log-likelihood over `S`, subtracts `beta`·KL(q‖N(0,I)), and returns the negative of that as `objective`. The `"elbo"` diagnostic is this `beta`-weighted value, so it is the ELBO only when `beta=1`.

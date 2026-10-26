@@ -8,7 +8,9 @@ from ..loss.base import (
     LossResult
 )
 from .._base.base import BaseAutoencoder, ModelOutput
-from .stochastic_layers import FullyFactorizedGaussian
+# Import the module, not the class: FullyFactorizedGaussian must be importable
+# only from pyautoencoder.variational.stochastic_layers, not from this module.
+from . import stochastic_layers
 
 @dataclass(slots=True, repr=False)
 class VAEEncodeOutput(ModelOutput):
@@ -145,7 +147,7 @@ class VAE(BaseAutoencoder):
         self.encoder = encoder
         self.decoder = decoder
         self.latent_dim = latent_dim
-        self.sampling_layer = FullyFactorizedGaussian(latent_dim=latent_dim)
+        self.sampling_layer = stochastic_layers.FullyFactorizedGaussian(latent_dim=latent_dim)
 
     # --- training-time hooks required by BaseAutoencoder ---
     def _encode(self, x: torch.Tensor, S: int = 1, sample: bool = True) -> VAEEncodeOutput:
@@ -180,13 +182,17 @@ class VAE(BaseAutoencoder):
         z, mu, log_var = self.sampling_layer(f, S=S, sample=sample)
         return VAEEncodeOutput(z=z, mu=mu, log_var=log_var)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def encode(self, x: torch.Tensor, S: int = 1, sample: bool = False) -> VAEEncodeOutput:
         r"""Encode inputs without tracking gradients (inference API).
 
-        Same as :meth:`_encode` under :func:`torch.inference_mode`, but with
+        Same as :meth:`_encode` under :func:`torch.no_grad`, but with
         an inference-friendly default: ``z`` is the posterior mean
         (``sample=False``). Pass ``sample=True`` to draw ``S`` samples.
+
+        It does not change the train/eval mode: call ``model.eval()`` first
+        if the encoder has layers such as dropout or batch normalization,
+        otherwise the posterior mean is not deterministic.
 
         Parameters
         ----------

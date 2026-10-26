@@ -105,7 +105,7 @@ def test_ae_forward_calls_encoder_then_decoder_consistently():
 
 # ================= inference-time behavior =================
 
-def test_ae_inference_encode_decode_use_inference_mode_no_grad():
+def test_ae_inference_encode_decode_run_without_grad():
     batch_size = 3
     in_features = 4
     latent_features = 2

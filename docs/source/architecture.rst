@@ -43,7 +43,9 @@ The :class:`~pyautoencoder.vanilla.AE` is a deterministic encoder-decoder model:
 
 .. code-block:: python
 
-    # Extract latent codes
+    model.eval()                             # encode/decode keep the train/eval mode
+
+    # Extract latent codes (no gradients; usable as inputs of other models)
     z = model.encode(x_batch).z              # AEEncodeOutput → latent tensor
 
     # Reconstruct from latents
@@ -99,7 +101,8 @@ dropout and batch normalization):
   ``compute_loss`` on this output is a Monte Carlo estimate of the ELBO, also
   for validation data.
 - :code:`model.encode(x)` – inference: no gradients and :math:`z = \mu` by
-  default (``sample=False``), with shape :math:`[B, 1, D_z]`. Use
+  default (``sample=False``), with shape :math:`[B, 1, D_z]`. It keeps the
+  train/eval mode, so call :code:`model.eval()` first. Use
   :code:`model.encode(x, S=10, sample=True)` to draw samples instead.
 - :code:`model(x, sample=False)` – :math:`z = \mu` in the full forward pass.
   ``S`` must be 1 in this case.
@@ -189,6 +192,7 @@ After training, AdaGVAE reuses the underlying VAE for single-image inference:
 .. code-block:: python
 
     # Encode / decode through the wrapped VAE as usual
+    model.eval()
     z = model.vae.encode(x).z
     x_reconstructed = model.vae.decode(z).x_hat
 
