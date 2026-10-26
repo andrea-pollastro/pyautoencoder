@@ -12,7 +12,7 @@ class AEEncodeOutput(ModelOutput):
     ----------
     z : torch.Tensor
         Latent code of shape ``[B, ...]`` produced by :meth:`AE._encode`
-        or :meth:`AE.encode <pyautoencoder._base.BaseAutoencoder.encode>`.
+        or :meth:`AE.encode`.
     """
 
     z: torch.Tensor
@@ -25,7 +25,7 @@ class AEDecodeOutput(ModelOutput):
     ----------
     x_hat : torch.Tensor
         Reconstruction (or logits) of shape ``[B, ...]`` produced by
-        :meth:`AE._decode` or :meth:`AE.decode <pyautoencoder._base.BaseAutoencoder.decode>`.
+        :meth:`AE._decode` or :meth:`AE.decode`.
     """
 
     x_hat: torch.Tensor
@@ -49,7 +49,7 @@ class AEOutput(ModelOutput):
 class AE(BaseAutoencoder):
     """Vanilla Autoencoder composed of a user-defined encoder and decoder.
 
-    The model follows the :class:`~pyautoencoder._base.BaseAutoencoder` interface and implements:
+    The model implements:
 
     * ``_encode(x)`` – maps inputs ``x`` to latent codes ``z``.
     * ``_decode(z)`` – maps latent codes ``z`` to reconstructions ``x_hat``.
@@ -67,7 +67,8 @@ class AE(BaseAutoencoder):
         encoder : nn.Module
             Module implementing the mapping ``x → z``.
         decoder : nn.Module
-            Module implementing the mapping ``z → x_hat``.
+            Module implementing the mapping ``z → x_hat``. Its output must
+            have the shape of the input ``x``, as :meth:`compute_loss` requires.
         """
 
         super().__init__()

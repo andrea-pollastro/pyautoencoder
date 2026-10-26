@@ -39,6 +39,8 @@ sphinx-build -n -E -b html docs/source docs/build/html
 
 Users import from the subpackages `pyautoencoder.vanilla`, `pyautoencoder.variational` and `pyautoencoder.loss` (the names in their `__init__.py` `__all__`). Implementation modules are private: `vanilla/_autoencoder.py`, `variational/_vae.py`, `loss/_base.py` and the `_base` package. Docs, README and examples never import from them, and tests import public names from the packages too. The only public submodule is `variational/stochastic_layers.py` (see VAE).
 
+The base classes (`BaseAutoencoder`, `ModelOutput`) are private and not meant to be subclassed by users: users extend the library by passing their own encoder and decoder, not by inheriting. Keeping them private leaves their contract free to change; making them public later would not break anything, the opposite would.
+
 ### Shared contract (`pyautoencoder/_base/base.py`)
 
 `BaseAutoencoder(nn.Module, ABC)` splits each model into:
@@ -73,9 +75,9 @@ All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelO
 ## Docs coupling
 
 - `docs/source/examples/*.rst` pull code from `examples/*.py` with `literalinclude`: functions by name (`:pyobject:`), plus the `# ---------------- Data` comment (`:end-before:`) and `if __name__ == "__main__":` (`:start-at:`). Renaming or removing any of these breaks the docs build.
-- `docs/source/api/models.rst` and `losses.rst` list classes and functions by hand (`autoclass`, `autofunction`); `base.rst` and `stochastic.rst` use `automodule`. New public classes must be added there, and also to the subpackage's `__init__.py` `__all__`.
+- `docs/source/api/models.rst` and `losses.rst` list classes and functions by hand (`autoclass`, `autofunction`); `stochastic.rst` uses `automodule`. The private `_base` package has no API page. New public classes must be added there, and also to the subpackage's `__init__.py` `__all__`.
 - Output and loss dataclasses document their fields in the docstring's `Attributes` section. Don't add `:undoc-members:` to their `autoclass` (fields would show twice) or `:no-index:` (the class could no longer be linked).
-- Cross-reference with the full public path, e.g. ``:meth:`~pyautoencoder.vanilla.AE.compute_loss` ``; short names like `AE.compute_loss` don't resolve in `.rst` pages. Inherited methods (`build`, `encode`, `decode`) are documented only on `pyautoencoder._base.BaseAutoencoder`.
+- Cross-reference with the full public path, e.g. ``:meth:`~pyautoencoder.vanilla.AE.compute_loss` ``; short names like `AE.compute_loss` don't resolve in `.rst` pages. AE and VAE show their inherited methods (`build`, `encode`, `decode`) through `:inherited-members: Module`, so link them on the public class (e.g. `pyautoencoder.variational.VAE.build`), never on `_base`.
 - intersphinx is deliberately not configured, so torch types (`torch.Tensor`, `nn.Module`) always appear as unresolved in the nitpicky output: ignore them.
 - Docstrings use NumPy style (parsed by napoleon), with math written as RST `:math:` / `.. math::`.
 - Docstring section headers that are not standard NumPy sections (e.g. "Shape convention") must be listed in `napoleon_custom_sections` in `docs/source/conf.py`. Otherwise they become real headings of the page, and the build does not warn.

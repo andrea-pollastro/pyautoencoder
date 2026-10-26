@@ -2,13 +2,11 @@ Autoencoder Models
 ===================
 
 :class:`~pyautoencoder.vanilla.AE` and :class:`~pyautoencoder.variational.VAE`
-inherit :meth:`~pyautoencoder._base.BaseAutoencoder.build` and
-:meth:`~pyautoencoder._base.BaseAutoencoder.decode` from
-:class:`~pyautoencoder._base.BaseAutoencoder` (see :doc:`base`).
-:class:`~pyautoencoder.vanilla.AE` also inherits
-:meth:`~pyautoencoder._base.BaseAutoencoder.encode`, while
-:class:`~pyautoencoder.variational.VAE` overrides it to return the posterior
-mean by default (see :meth:`VAE.encode <pyautoencoder.variational.VAE.encode>`).
+share ``build``, ``encode`` and ``decode``;
+:meth:`VAE.encode <pyautoencoder.variational.VAE.encode>` returns the posterior
+mean by default. Build your model by passing your own encoder and decoder to
+these classes: the base classes they share are internal and not meant to be
+subclassed.
 
 Vanilla Autoencoder
 -------------------
@@ -16,8 +14,8 @@ Vanilla Autoencoder
 .. autoclass:: pyautoencoder.vanilla.AE
    :members:
    :undoc-members:
-   :show-inheritance:
-   :exclude-members: _encode, _decode
+   :inherited-members: Module
+   :exclude-members: _encode, _decode, training
    :special-members: __init__
 
 .. rubric:: Data Structures
@@ -37,8 +35,8 @@ Variational Autoencoder
 .. autoclass:: pyautoencoder.variational.VAE
    :members:
    :undoc-members:
-   :show-inheritance:
-   :exclude-members: _encode, _decode
+   :inherited-members: Module
+   :exclude-members: _encode, _decode, training
    :special-members: __init__
 
 .. rubric:: Data Structures

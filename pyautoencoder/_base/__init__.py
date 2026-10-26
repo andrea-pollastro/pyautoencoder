@@ -1,14 +1,15 @@
-"""Internal base classes and utilities for autoencoders.
+"""Internal base classes shared by the models of this package.
 
-This module provides the abstract :class:`BaseAutoencoder` interface and the
-output container :class:`ModelOutput`. These form the foundation for all
-autoencoder implementations in this package.
+:class:`BaseAutoencoder` defines the contract of :class:`~pyautoencoder.vanilla.AE`
+and :class:`~pyautoencoder.variational.VAE`, and :class:`ModelOutput` is the
+base of their output dataclasses.
 
 Warning
 -------
-This is an internal API. Most users should work with
-:class:`~pyautoencoder.vanilla.AE` or :class:`~pyautoencoder.variational.VAE`
-instead of using these base classes directly.
+These classes are not part of the public API: they are not meant to be
+imported or subclassed by users, and their contract may change between
+releases. To build a model, pass your own encoder and decoder to
+:class:`~pyautoencoder.vanilla.AE` or :class:`~pyautoencoder.variational.VAE`.
 """
 
 from .base import (

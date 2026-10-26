@@ -26,7 +26,7 @@ class FullyFactorizedGaussian(nn.Module):
 
     The linear layers ``mu`` and ``log_var`` are :class:`torch.nn.LazyLinear`:
     their input size ``F`` is inferred on the first forward pass, for example
-    the one run by :meth:`~pyautoencoder._base.BaseAutoencoder.build`.
+    the one run by :meth:`VAE.build <pyautoencoder.variational.VAE.build>`.
     """
 
     def __init__(self, latent_dim: int):

@@ -146,8 +146,8 @@ class BaseAutoencoder(nn.Module, ABC):
         """Full training forward pass of the autoencoder.
 
         This method is responsible for connecting the encoder and decoder and
-        producing all outputs needed for training (for example latents,
-        reconstructions and any auxiliary losses).
+        producing all outputs needed for training (for example latent codes
+        and reconstructions).
 
         Parameters
         ----------
@@ -193,8 +193,9 @@ class BaseAutoencoder(nn.Module, ABC):
         Returns
         -------
         ModelOutput
-            The encoder :class:`ModelOutput`, typically containing at least a
-            latent code (for example ``z``).
+            The output of :meth:`_encode`, with at least the latent code ``z``:
+            :class:`~pyautoencoder.vanilla.AEEncodeOutput` for
+            :class:`~pyautoencoder.vanilla.AE`.
         """
 
         return self._encode(x, *args, **kwargs)
@@ -221,8 +222,11 @@ class BaseAutoencoder(nn.Module, ABC):
         Returns
         -------
         ModelOutput
-            The decoder :class:`ModelOutput`, typically containing at least a
-            reconstruction (for example ``x_hat``).
+            The output of :meth:`_decode`, with at least the reconstruction
+            ``x_hat``: :class:`~pyautoencoder.vanilla.AEDecodeOutput` for
+            :class:`~pyautoencoder.vanilla.AE`,
+            :class:`~pyautoencoder.variational.VAEDecodeOutput` for
+            :class:`~pyautoencoder.variational.VAE`.
         """
 
         return self._decode(z, *args, **kwargs)

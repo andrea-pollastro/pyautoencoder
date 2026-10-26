@@ -12,7 +12,7 @@ fundamental autoencoder architectures:
 3. **Adaptive Group VAE (AdaGVAE)** – Paired-input VAE for disentangled representations
 
 All follow a consistent build/forward/compute_loss pattern and integrate naturally with
-PyTorch. AdaGVAE extends the VAE interface for paired inputs.
+PyTorch. AdaGVAE wraps a VAE and applies it to paired inputs.
 
 Vanilla Autoencoder (AE)
 ------------------------
@@ -22,7 +22,8 @@ The :class:`~pyautoencoder.vanilla.AE` is a deterministic encoder-decoder model:
 **Architecture**
 
 - **Encoder** – Maps input :math:`x` to latent code :math:`z = f(x)`
-- **Decoder** – Maps latent :math:`z` back to reconstruction :math:`\hat{x} = g(z)`
+- **Decoder** – Maps latent :math:`z` back to reconstruction :math:`\hat{x} = g(z)`,
+  with the same shape as :math:`x`
 - **Forward pass** – Returns both :math:`z` and :math:`\hat{x}`
 
 **Training**
@@ -74,7 +75,8 @@ The :class:`~pyautoencoder.variational.VAE` implements the VAE framework
   log-variance :math:`\log\sigma^2` of :math:`q(z|x)`, then draws :math:`z`
   with the reparameterization trick
 - **Decoder** – Maps :math:`z` to the parameters of :math:`p(x|z)` (the
-  reconstruction, or logits for the Bernoulli likelihood)
+  reconstruction, or logits for the Bernoulli likelihood), with the shape of
+  one input for each latent code
 
 **Training**
 
@@ -124,7 +126,7 @@ dropout and batch normalization):
 
     class VAEOutput:
         x_hat: torch.Tensor       # Reconstructions [B, S, ...]
-        z: torch.Tensor           # Samples [B, S, D_z]
+        z: torch.Tensor           # Latent codes [B, S, D_z] (samples, or the mean with sample=False)
         mu: torch.Tensor          # Posterior mean [B, D_z]
         log_var: torch.Tensor     # Posterior log-variance [B, D_z]
 
@@ -178,7 +180,7 @@ independently.
 
     vae = VAE(encoder=encoder_nn, decoder=decoder_nn, latent_dim=64)
     model = AdaGVAE(vae=vae)
-    model.build(sample_input)
+    model.build(sample_input)  # a batch of single inputs, not a pair
 
     # Training step — forward takes a pair
     output = model((x1_batch, x2_batch), S=5)
@@ -245,7 +247,7 @@ over the batch):
 ELBO Loss (VAE)
 ~~~~~~~~~~~~~~~
 
-For variational autoencoders, use :meth:`VAE.compute_loss <pyautoencoder.variational.VAE.compute_loss>` to compute the negative ELBO:
+For variational autoencoders, use :meth:`VAE.compute_loss <pyautoencoder.variational.VAE.compute_loss>` to compute the negative (beta-weighted) ELBO:
 
 .. code-block:: python
 
@@ -283,8 +285,9 @@ over the pair:
     loss_result = model.compute_loss((x1, x2), output, beta=4.0, likelihood='bernoulli')
     loss_result.objective.backward()
 
-The loss is the sum of two independent beta-VAE ELBOs, each evaluated on the
-adapted posteriors :math:`q(\hat{z}|x_1)` and :math:`q(\hat{z}|x_2)`:
+The objective is the negative of the sum of two beta-VAE ELBOs, evaluated on the
+adapted posteriors :math:`q(\hat{z}|x_1)` and :math:`q(\hat{z}|x_2)` in train mode
+(on the plain VAE posteriors in eval mode):
 
 .. math::
 
@@ -336,7 +339,7 @@ This keeps the library flexible and composable with existing PyTorch code.
 
 **Explicit Initialization**
 
-The :meth:`build <pyautoencoder._base.BaseAutoencoder.build>` method initializes size-dependent parameters:
+The :meth:`build <pyautoencoder.variational.VAE.build>` method initializes size-dependent parameters:
 
 .. code-block:: python
 

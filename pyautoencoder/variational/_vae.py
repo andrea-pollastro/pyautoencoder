@@ -41,7 +41,7 @@ class VAEDecodeOutput(ModelOutput):
     ----------
     x_hat : torch.Tensor
         Reconstructions or logits of shape ``[B, S, ...]``, produced by
-        :meth:`VAE._decode` or :meth:`VAE.decode <pyautoencoder._base.BaseAutoencoder.decode>`.
+        :meth:`VAE._decode` or :meth:`VAE.decode`.
     """
 
     x_hat: torch.Tensor
@@ -113,7 +113,7 @@ class VAE(BaseAutoencoder):
     * ``x_hat``: ``[B, S, ...]``
     * ``mu``, ``log_var``: ``[B, D_z]`` (one posterior per input, no ``S``)
 
-    Consequently, :meth:`decode <pyautoencoder._base.BaseAutoencoder.decode>`
+    Consequently, :meth:`decode`
     expects ``z`` of shape ``[B, S, D_z]``. To decode a batch of single codes
     ``[N, D_z]`` (e.g. samples from the prior :math:`p(z)`), use
     ``z.unsqueeze(1)`` or call ``model.decoder`` directly.
@@ -132,7 +132,9 @@ class VAE(BaseAutoencoder):
         encoder : nn.Module
             Maps input ``x`` to a feature vector ``f(x)`` with shape ``[B, F]``.
         decoder : nn.Module
-            Maps latent samples ``z`` to reconstructions ``x_hat``.
+            Maps latent codes of shape ``[N, D_z]`` to reconstructions (or
+            logits) ``x_hat``. Its output for one code must have the shape of
+            one input, ``x.shape[1:]``, as :meth:`compute_loss` requires.
         latent_dim : int
             Dimensionality ``D_z`` of the latent space.
 
@@ -358,7 +360,8 @@ class VAE(BaseAutoencoder):
         LossResult
             Result containing:
 
-            * **objective** – Negative mean ELBO (scalar).
+            * **objective** – Negative batch mean of :math:`\mathcal{L}(x; \beta)`
+              (the negative ELBO when ``beta = 1``), scalar.
             * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"elbo"``: Batch mean of :math:`\mathcal{L}(x; \beta)`
@@ -494,7 +497,7 @@ class AdaGVAE(nn.Module):
         ----------
         input_sample : torch.Tensor
             A representative batch of single inputs (not a pair), passed to
-            :meth:`VAE.build <pyautoencoder._base.BaseAutoencoder.build>`. Only its shape matters.
+            :meth:`VAE.build`. Only its shape matters.
         """
         self.vae.build(input_sample)
 
@@ -650,7 +653,8 @@ class AdaGVAE(nn.Module):
         LossResult
             Result containing:
 
-            * **objective** – Sum of negative ELBOs for both inputs (scalar).
+            * **objective** – Sum of the ``objective`` values of
+              :meth:`VAE.compute_loss` for ``x1`` and ``x2`` (scalar).
             * **diagnostics** – Dictionary of detached scalar tensors with:
 
               - ``"elbo"``: Sum of the two ``"elbo"`` diagnostics of

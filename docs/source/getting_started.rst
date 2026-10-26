@@ -113,8 +113,8 @@ Train a VAE with the reparameterization trick:
 Core Concepts
 -------------
 
-ModelOutput
-~~~~~~~~~~~
+Model outputs
+~~~~~~~~~~~~~
 
 All forward passes return structured output dataclasses that are easy to inspect:
 
