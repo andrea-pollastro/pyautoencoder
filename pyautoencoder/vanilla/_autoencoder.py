@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from dataclasses import dataclass
 from .._base.base import BaseAutoencoder, ModelOutput
-from ..loss.base import log_likelihood, LikelihoodType, LossResult
+from ..loss._base import log_likelihood, LikelihoodType, LossResult
 
 @dataclass(slots=True, repr=False)
 class AEEncodeOutput(ModelOutput):

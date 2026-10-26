@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from pyautoencoder.vanilla.autoencoder import (
+from pyautoencoder.vanilla import (
     AE,
     AEEncodeOutput,
     AEDecodeOutput,
@@ -172,7 +172,7 @@ def test_ae_compute_loss_gaussian_likelihood_returns_correct_type():
 
     loss_result = ae.compute_loss(x, ae_output)
 
-    from pyautoencoder.loss.base import LossResult
+    from pyautoencoder.loss import LossResult
     assert isinstance(loss_result, LossResult)
     assert hasattr(loss_result, 'objective')
     assert hasattr(loss_result, 'diagnostics')

@@ -1,4 +1,4 @@
-from .base import (
+from ._base import (
     log_likelihood,
     LossResult,
     LikelihoodType,

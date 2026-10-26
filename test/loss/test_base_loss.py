@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from pyautoencoder.loss.base import (
+from pyautoencoder.loss import (
     log_likelihood,
     kl_divergence_diag_gaussian,
     LikelihoodType,

@@ -1,4 +1,4 @@
-from .autoencoder import (
+from ._autoencoder import (
     AE,
     AEDecodeOutput,
     AEEncodeOutput,

@@ -1,4 +1,4 @@
-from .vae import (
+from ._vae import (
     AdaGVAE,
     AdaGVAEOutput,
     VAE,

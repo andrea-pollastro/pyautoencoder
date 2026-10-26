@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from pyautoencoder._base.base import ModelOutput, BaseAutoencoder
-from pyautoencoder.loss.base import LossResult
+from pyautoencoder.loss import LossResult
 
 # ================= ModelOutput =================
 

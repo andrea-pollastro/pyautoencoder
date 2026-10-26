@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-from ..loss.base import (
+from ..loss._base import (
     LikelihoodType,
     log_likelihood,
     kl_divergence_diag_gaussian,

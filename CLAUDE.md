@@ -35,6 +35,10 @@ sphinx-build -n -E -b html docs/source docs/build/html
 
 ## Architecture
 
+### Public API
+
+Users import from the subpackages `pyautoencoder.vanilla`, `pyautoencoder.variational` and `pyautoencoder.loss` (the names in their `__init__.py` `__all__`). Implementation modules are private: `vanilla/_autoencoder.py`, `variational/_vae.py`, `loss/_base.py` and the `_base` package. Docs, README and examples never import from them, and tests import public names from the packages too. The only public submodule is `variational/stochastic_layers.py` (see VAE).
+
 ### Shared contract (`pyautoencoder/_base/base.py`)
 
 `BaseAutoencoder(nn.Module, ABC)` splits each model into:
@@ -46,7 +50,7 @@ sphinx-build -n -E -b html docs/source docs/build/html
 
 All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelOutput`. `repr=False` keeps the base class's tensor-aware `__repr__`, which prints shape and dtype instead of values. AE and VAE each have an `*EncodeOutput`, a `*DecodeOutput` and a full `*Output`; AdaGVAE has only `AdaGVAEOutput` (a pair of `VAEOutput`s).
 
-### Losses (`pyautoencoder/loss/base.py`)
+### Losses (`pyautoencoder/loss/_base.py`)
 
 - `LossResult.objective` is the scalar to backprop. `LossResult.diagnostics` holds **detached 0-dim tensors, not floats**, so the loss doesn't force a GPU sync; callers run `.item()` when they log.
 - `log_likelihood` is elementwise and raises on any shape mismatch: broadcasting is deliberately rejected. The Gaussian case has unit variance and no normalization constant. For Bernoulli, `x_hat` is **logits**.
@@ -55,7 +59,7 @@ All model outputs are `@dataclass(slots=True, repr=False)` subclasses of `ModelO
 ### VAE (`pyautoencoder/variational/`)
 
 - The encoder must output flat features `[B, F]`. `FullyFactorizedGaussian` maps them to `mu`/`log_var` with `nn.LazyLinear`, which is why `build()` is required.
-- `FullyFactorizedGaussian` must be importable only as `from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian` (at runtime it is `vae.sampling_layer`). It is deliberately not in `pyautoencoder.variational` or its `__all__`, and `vae.py` imports the module, not the class, so it is not a name of `vae` either.
+- `FullyFactorizedGaussian` must be importable only as `from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian` (at runtime it is `vae.sampling_layer`). It is deliberately not in `pyautoencoder.variational` or its `__all__`, and `_vae.py` imports the module, not the class, so it is not a name of `_vae` either.
 - Latents always carry a Monte Carlo sample dimension: `z` is `[B, S, D_z]` even when `S=1`, and `x_hat` is `[B, S, ...]`. `_decode` rejects anything else and reshapes to `[B*S, D_z]` before calling the user's decoder.
 - The explicit `sample` argument decides between sampling and the posterior mean; train/eval mode has no effect. `forward`/`_encode` default to `sample=True`, while `VAE.encode` defaults to `sample=False` and returns the posterior mean. `sample=False` requires `S=1`.
 - `compute_loss` first checks that `x_hat` is `[B, S, *x.shape[1:]]` and that `mu`/`log_var` are `[B, latent_dim]`, and raises otherwise. It never infers `S` from the shapes (any guess is ambiguous), and it broadcasts `x` over `S` only. It then takes the Monte Carlo average of the log-likelihood over `S`, subtracts `beta`·KL(q‖N(0,I)), and returns the negative of that as `objective`. The `"elbo"` diagnostic is this `beta`-weighted value, so it is the ELBO only when `beta=1`.

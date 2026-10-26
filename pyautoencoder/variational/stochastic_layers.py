@@ -2,7 +2,7 @@
 
 A VAE creates its :class:`FullyFactorizedGaussian` as ``vae.sampling_layer``.
 To use the class directly, import it from this module; it is not exported by
-:mod:`pyautoencoder.variational`::
+``pyautoencoder.variational``::
 
     from pyautoencoder.variational.stochastic_layers import FullyFactorizedGaussian
 """

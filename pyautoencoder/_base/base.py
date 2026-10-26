@@ -4,7 +4,7 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 
-from ..loss.base import LossResult
+from ..loss._base import LossResult
 
 @dataclass(slots=True)
 class ModelOutput:

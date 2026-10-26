@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from pyautoencoder.variational.vae import (
+from pyautoencoder.variational import (
     VAE,
     VAEEncodeOutput,
     VAEDecodeOutput,
@@ -310,7 +310,7 @@ def test_vae_compute_loss_gaussian_likelihood_returns_correct_type():
 
     vae_output = vae.forward(x, S=S)
 
-    from pyautoencoder.loss.base import LossResult
+    from pyautoencoder.loss import LossResult
     loss_result = vae.compute_loss(x, vae_output)
 
     assert isinstance(loss_result, LossResult)
@@ -513,7 +513,7 @@ def test_vae_compute_loss_with_different_likelihood_formats():
     loss_str = vae.compute_loss(x, vae_output, likelihood='gaussian')
     assert isinstance(loss_str.objective, torch.Tensor)
 
-    from pyautoencoder.loss.base import LikelihoodType
+    from pyautoencoder.loss import LikelihoodType
     loss_enum = vae.compute_loss(x, vae_output, likelihood=LikelihoodType.GAUSSIAN)
     assert isinstance(loss_enum.objective, torch.Tensor)
 
@@ -549,7 +549,7 @@ def test_vae_state_dict_round_trip_without_build():
 # ================= AdaGVAE =================
 
 def test_adagvae_wraps_vae():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     in_features, latent_dim = 6, 3
     encoder = DummyEncoder(in_features=in_features, feat_dim=10)
@@ -564,7 +564,7 @@ def test_adagvae_wraps_vae():
 
 
 def test_adagvae_forward_training_returns_adagvae_output():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, out_features, S = 4, 6, 8, 3, 5, 2
     x1 = torch.randn(B, in_features)
@@ -595,7 +595,7 @@ def test_adagvae_forward_training_returns_adagvae_output():
 
 
 def test_adagvae_inference_via_encode_decode():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, out_features = 4, 6, 8, 3, 5
     x = torch.randn(B, in_features)
@@ -621,7 +621,7 @@ def test_adagvae_inference_via_encode_decode():
 
 
 def test_adagvae_encode_pair_returns_correct_shapes():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 3
     x1 = torch.randn(B, in_features)
@@ -649,8 +649,8 @@ def test_adagvae_encode_pair_returns_correct_shapes():
 
 
 def test_adagvae_compute_loss_returns_correct_structure():
-    from pyautoencoder.variational.vae import AdaGVAE
-    from pyautoencoder.loss.base import LossResult
+    from pyautoencoder.variational import AdaGVAE
+    from pyautoencoder.loss import LossResult
 
     B, in_features, feat_dim, latent_dim, S = 4, 6, 8, 3, 2
     x1 = torch.randn(B, in_features)
@@ -685,7 +685,7 @@ def test_adagvae_compute_loss_returns_correct_structure():
 
 
 def test_adagvae_compute_loss_backward_flows():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 2, 4, 6, 2, 2
     x1 = torch.randn(B, in_features)
@@ -712,7 +712,7 @@ def test_adagvae_compute_loss_backward_flows():
 
 
 def test_adagvae_compute_loss_with_beta():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
     x1 = torch.randn(B, in_features)
@@ -736,7 +736,7 @@ def test_adagvae_compute_loss_with_beta():
 def test_adagvae_identical_inputs_produce_no_grouping():
     """When x1 == x2, KL(q1||q2) = 0 everywhere, tau = 0, mask is all-False.
     The adapted posteriors must equal the individual (unadapted) posteriors."""
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim = 3, 5, 7, 4
     x = torch.randn(B, in_features)
@@ -758,7 +758,7 @@ def test_adagvae_identical_inputs_produce_no_grouping():
 
 
 def test_adagvae_encode_pair_with_different_s():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim = 3, 5, 7, 2
     x1 = torch.randn(B, in_features)
@@ -781,7 +781,7 @@ def test_adagvae_encode_pair_with_different_s():
 
 
 def test_adagvae_compute_loss_bernoulli_likelihood():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
     x1 = torch.sigmoid(torch.randn(B, in_features))
@@ -803,7 +803,7 @@ def test_adagvae_compute_loss_bernoulli_likelihood():
 
 
 def test_adagvae_compute_loss_equals_sum_of_individual_losses():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, in_features, feat_dim, latent_dim, S = 3, 5, 7, 2, 2
     x1 = torch.randn(B, in_features)
@@ -834,7 +834,7 @@ def test_adagvae_compute_loss_equals_sum_of_individual_losses():
 
 def test_adagvae_encode_pair_groups_dimensions_below_kl_threshold(monkeypatch):
     """Adaptive grouping against hand-computed values (Locatello et al., 2020)."""
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     D = 4
     adagvae = AdaGVAE(vae=_make_built_vae(latent_dim=D))
@@ -959,7 +959,7 @@ def test_vae_compute_loss_rejects_bad_posterior_shapes(mu_shape, log_var_shape):
 
 
 def test_adagvae_compute_loss_rejects_bad_shapes():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     adagvae = AdaGVAE(vae=_make_built_vae(in_features=5))
     x1, x2 = torch.randn(3, 5), torch.randn(3, 5)
@@ -988,7 +988,7 @@ def test_vae_rejects_non_flat_encoder_output():
 
 
 def test_adagvae_rejects_invalid_S():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     adagvae = AdaGVAE(vae=_make_built_vae())
     adagvae.train()
@@ -1001,7 +1001,7 @@ def test_adagvae_rejects_invalid_S():
 # ================= AdaGVAE train vs eval =================
 
 def test_adagvae_eval_forward_behaves_as_plain_vae():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     B, S = 4, 3
     adagvae = AdaGVAE(vae=_make_built_vae())
@@ -1024,7 +1024,7 @@ def test_adagvae_eval_forward_behaves_as_plain_vae():
 
 
 def test_adagvae_train_forward_shares_lowest_kl_dimension():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     adagvae = AdaGVAE(vae=_make_built_vae(latent_dim=4))
     adagvae.train()
@@ -1040,7 +1040,7 @@ def test_adagvae_train_forward_shares_lowest_kl_dimension():
 
 
 def test_compute_loss_accepts_output_keyword_like_base_class():
-    from pyautoencoder.variational.vae import AdaGVAE
+    from pyautoencoder.variational import AdaGVAE
 
     vae = _make_built_vae()
     x1, x2 = torch.randn(3, 5), torch.randn(3, 5)
@@ -1057,6 +1057,6 @@ def test_sampling_layer_class_is_importable_only_from_stochastic_layers():
     with pytest.raises(ImportError):
         from pyautoencoder.variational import FullyFactorizedGaussian as _  # noqa: F401
     with pytest.raises(ImportError):
-        from pyautoencoder.variational.vae import FullyFactorizedGaussian as _  # noqa: F401, F811
+        from pyautoencoder.variational._vae import FullyFactorizedGaussian as _  # noqa: F401, F811
 
     assert isinstance(_make_built_vae().sampling_layer, FullyFactorizedGaussian)
